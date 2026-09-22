@@ -15,6 +15,19 @@ Első verziós klienskezelő személyi edzők számára.
 - Kliensregisztráció és saját profil-/fejlődésnézet
 - Böngészőben tárolt adatok `localStorage` segítségével
 
+## Adatbázis: Supabase PostgreSQL
+
+A megbízható éles használathoz a projekt tartalmazza a Supabase PostgreSQL sémát és a szerepkör-alapú RLS jogosultságokat a `supabase-schema.sql` fájlban.
+
+Beállítás:
+
+1. Hozz létre egy Supabase projektet.
+2. Futtasd le a `supabase-schema.sql` fájlt a Supabase SQL Editorban.
+3. Másold a `supabase-config.example.js` fájlt `supabase-config.js` néven.
+4. Írd be a Supabase projekt URL-jét és anon kulcsát a konfigurációba.
+
+A `supabase-config.js` fájlt ne töltsd fel titkos kulcsokkal. Az anon kulcs kliensoldalon használható, a jogosultságokat az RLS szabályok védik.
+
 ## Helyi futtatás
 
 Nyisd meg az `index.html` fájlt böngészőben. Nincs szükség build lépésre.
