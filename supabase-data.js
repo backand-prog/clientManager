@@ -67,7 +67,7 @@
     const result = await client.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { data: { full_name: values.name, role: values.role, specialty: values.specialty || null, goal: values.goal || null } }
+      options: { emailRedirectTo: window.location.href, data: { full_name: values.name, role: values.role, specialty: values.specialty || null, goal: values.goal || null } }
     });
     if (result.error) throw result.error;
     return result.data.user;
@@ -100,5 +100,25 @@
     if (enabled) await client.auth.signOut();
   }
 
-  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, signOut };
+  async function accountAdmin(body) {
+    if (!enabled) return null;
+    const result = await client.functions.invoke("account-admin", { body });
+    if (result.error) throw result.error;
+    if (result.data?.error) throw new Error(result.data.error);
+    return result.data;
+  }
+
+  async function requestPasswordReset(email) {
+    if (!enabled) return null;
+    const result = await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    if (result.error) throw result.error;
+  }
+
+  async function updatePassword(password) {
+    if (!enabled) return null;
+    const result = await client.auth.updateUser({ password });
+    if (result.error) throw result.error;
+  }
+
+  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, signOut, accountAdmin, requestPasswordReset, updatePassword };
 })();

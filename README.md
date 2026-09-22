@@ -25,8 +25,12 @@ Beállítás:
 2. Futtasd le a `supabase-schema.sql` fájlt a Supabase SQL Editorban.
 3. Másold a `supabase-config.example.js` fájlt `supabase-config.js` néven.
 4. Írd be a Supabase projekt URL-jét és anon kulcsát a konfigurációba.
+5. A Supabase Dashboardban az Authentication beállításainál kapcsold be a **Confirm email** opciót.
+6. Telepítsd az admin fiókkezelő Edge Functiont a Supabase CLI-val: `supabase functions deploy account-admin`.
 
 A `supabase-config.js` fájlt ne töltsd fel titkos kulcsokkal. Az anon kulcs kliensoldalon használható, a jogosultságokat az RLS szabályok védik.
+
+Az Edge Function a `SUPABASE_SERVICE_ROLE_KEY` értéket csak szerveroldalon használja edzők létrehozásához/törléséhez és saját fiók törléséhez. Ezt a kulcsot soha ne tedd a frontend konfigurációjába.
 
 ## Helyi futtatás
 

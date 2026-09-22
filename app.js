@@ -46,6 +46,7 @@ async function refreshRemote() {
 
 async function initializeRemote() {
   if (!remoteMode) return;
+  if (window.location.hash.includes("type=recovery")) { renderPasswordReset(); return; }
   try {
     const remoteData = await window.remoteStore.load();
     if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); render(); }
@@ -117,10 +118,16 @@ function renderTrainerContent(trainer) {
 
 function renderAdminContent() {
   if (currentView === "clients") return renderClients();
+  if (currentView === "trainers") return renderTrainers();
   if (currentView === "client-detail") return renderEnhancedClientDetail(selectedClient());
   const clients = data.users.filter((user) => user.role === "client");
   const openSessions = clients.reduce((total, client) => total + (client.workouts || []).filter((workout) => workout.status === "Beütemezve").length, 0);
   return `<div class="topbar"><div><div class="eyebrow">2026. március 24., kedd</div><h1>Jó reggelt, Andras.</h1><p>Így halad a coaching praxisod.</p></div><button class="btn btn-teal" id="add-client">+ Új kliens</button></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Összes kliens</div><div class="trend">+1 ebben a hónapban</div></div><div class="stat"><div class="number">${openSessions}</div><div class="label">Nyitott edzések</div><div class="trend">Beütemezve</div></div><div class="stat"><div class="number">84%</div><div class="label">Átlagos teljesítés</div><div class="trend">+6% az előző hónaphoz képest</div></div><div class="stat"><div class="number">6</div><div class="label">Olvasatlan frissítés</div><div class="trend">Átnézésre vár</div></div></div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Kliens áttekintő</h2><button class="text-button" data-view="clients">Összes megtekintése</button></div>${renderClientTable(clients.slice(0, 4))}</section><section class="panel"><div class="panel-head"><h2>Legutóbbi aktivitás</h2></div>${data.activities.slice(0, 4).map((item) => `<div class="activity"><div class="activity-mark">${item.mark}</div><p>${escapeHtml(item.text)}<small>${escapeHtml(item.time)}</small></p></div>`).join("")}</section></div>`;
+}
+
+function renderTrainers() {
+  const trainerList = trainers();
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzők</div><h1>Edzők</h1><p>Az edzői fiókokat és hozzáféréseket itt kezelheted.</p></div><button class="btn btn-teal" id="add-trainer">+ Új edző</button></div><section class="panel"><div class="table-wrap"><table><thead><tr><th>Edző</th><th>Szakterület</th><th>Hozzárendelt kliens</th><th></th></tr></thead><tbody>${trainerList.length ? trainerList.map((trainer) => `<tr><td><div class="client-cell"><div class="avatar">${initials(trainer.name)}</div>${escapeHtml(trainer.name)}</div><small>${escapeHtml(trainer.email || "")}</small></td><td>${escapeHtml(trainer.specialty || "Általános edzés")}</td><td>${data.users.filter((client) => client.role === "client" && (client.trainerIds || []).includes(trainer.id)).length}</td><td><button class="text-button btn-delete-trainer" data-trainer-id="${trainer.id}">Törlés</button></td></tr>`).join("") : `<tr><td colspan="4"><div class="empty-state">Még nincs edző.</div></td></tr>`}</tbody></table></div></section>`;
 }
 
 function renderClientTable(clients) {
@@ -164,6 +171,10 @@ function renderTrainerAssignmentModal(client) {
   return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${escapeHtml(client.name)} / Kapcsolatok</div><h2>Edzők hozzárendelése</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="trainer-assignment-form"><p style="color:var(--muted);font-size:.84rem;margin-top:0">Egy klienshez több edző is hozzárendelhető. A jelölés kikapcsolásával a kapcsolat megszűnik.</p>${trainers().length ? trainers().map((trainer) => `<label style="display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line);font-weight:600"><input type="checkbox" name="trainerIds" value="${trainer.id}" ${selected.includes(trainer.id) ? "checked" : ""} /> ${escapeHtml(trainer.name)} <span style="color:var(--muted);font-size:.75rem">${escapeHtml(trainer.specialty || "Edző")}</span></label>`).join("") : `<div class="empty-state">Még nincs regisztrált edző.</div>`}<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Kapcsolatok mentése</button></div></form></div></div>`;
 }
 
+function renderTrainerModal() {
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Adminisztráció</div><h2>Új edző létrehozása</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="trainer-form"><div class="field"><label for="trainer-name">Teljes név</label><input id="trainer-name" name="name" required /></div><div class="field"><label for="trainer-email">E-mail-cím</label><input id="trainer-email" name="email" type="email" required /></div><div class="field"><label for="trainer-password">Ideiglenes jelszó</label><input id="trainer-password" name="password" type="password" minlength="8" required /></div><div class="field"><label for="trainer-specialty">Szakterület</label><input id="trainer-specialty" name="specialty" placeholder="pl. Erőnléti edzés" /></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edző létrehozása</button></div></form></div></div>`;
+}
+
 function renderWorkoutModalForUser(client, workout = {}, index = "") {
   const user = currentUser();
   const options = user.role === "admin" ? `<option value="solo" ${!workout.trainerId ? "selected" : ""}>Egyéni edzés</option>${trainers().map((trainer) => `<option value="${trainer.id}" ${workout.trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}` : `<option value="${user.id}" selected>${escapeHtml(user.name)}</option><option value="solo" ${!workout.trainerId ? "" : ""}>Egyéni edzés</option>`;
@@ -192,10 +203,38 @@ function bindModalEvents() {
   document.querySelector("#trainer-assignment-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); selectedClient().trainerIds = new FormData(event.currentTarget).getAll("trainerIds"); if (remoteMode) window.remoteStore.updateAssignments(selectedClient().id, selectedClient().trainerIds).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast("Edzői kapcsolatok frissítve");
   });
+  document.querySelector("#trainer-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    try {
+      if (remoteMode) await window.remoteStore.accountAdmin({ action: "create-trainer", ...values });
+      else data.users.push({ ...values, id: `trainer-${Date.now()}`, role: "trainer", trainerIds: [], workouts: [] });
+      document.querySelector("#modal-backdrop").remove(); await refreshRemote(); render(); toast("Edzői fiók létrehozva");
+    } catch (error) { toast(`Nem sikerült létrehozni: ${error.message}`); }
+  });
+}
+
+async function deleteCurrentAccount() {
+  if (!confirm("Biztosan törlöd a saját fiókodat? Ez a művelet nem vonható vissza.")) return;
+  try { if (remoteMode) await window.remoteStore.accountAdmin({ action: "delete-self" }); data.users = data.users.filter((user) => user.id !== currentUser()?.id); session = null; localStorage.removeItem(SESSION_KEY); render(); toast("A fiókod törölve."); }
+  catch (error) { toast(`Nem sikerült törölni: ${error.message}`); }
+}
+
+async function deleteTrainer(trainerId) {
+  if (!confirm("Biztosan törlöd ezt az edzői fiókot? A hozzárendelései is megszűnnek.")) return;
+  try { if (remoteMode) await window.remoteStore.accountAdmin({ action: "delete-user", userId: trainerId }); data.users = data.users.filter((user) => user.id !== trainerId); render(); toast("Az edző törölve."); }
+  catch (error) { toast(`Nem sikerült törölni: ${error.message}`); }
 }
 
 function bindEvents() {
   if (remoteMode) document.querySelector("#login-form")?.addEventListener("submit", remoteLogin, { capture: true });
+  if (currentUser()?.role === "admin" && !document.querySelector("[data-view='trainers']")) {
+    const button = document.createElement("button"); button.className = "nav-btn"; button.dataset.view = "trainers"; button.textContent = "Edzők"; document.querySelector(".sidebar .nav-label")?.after(button); button.addEventListener("click", () => { currentView = "trainers"; render(); });
+  }
+  const loginForm = document.querySelector("#login-form");
+  if (loginForm && !document.querySelector("#forgot-password")) {
+    const button = document.createElement("button"); button.type = "button"; button.id = "forgot-password"; button.className = "text-button"; button.textContent = "Elfelejtett jelszó"; loginForm.append(button);
+    button.addEventListener("click", openForgotPassword);
+  }
   document.querySelector("#login-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); const email = document.querySelector("#email").value.trim().toLowerCase(); const password = document.querySelector("#password").value;
     const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
@@ -203,6 +242,9 @@ function bindEvents() {
   });
   document.querySelector("#show-register")?.addEventListener("click", () => openRegistrationV2());
   document.querySelector("#logout")?.addEventListener("click", async () => { if (remoteMode) await window.remoteStore.signOut(); session = null; localStorage.removeItem(SESSION_KEY); render(); });
+  if (["trainer", "client"].includes(currentUser()?.role)) {
+    if (!document.querySelector("#delete-account")) { const button = document.createElement("button"); button.id = "delete-account"; button.className = "nav-btn btn-danger"; button.textContent = "Fiók törlése"; document.querySelector(".sidebar")?.append(button); button.addEventListener("click", deleteCurrentAccount); }
+  }
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { currentView = button.dataset.view; render(); }));
   document.querySelector("#add-client")?.addEventListener("click", () => { if (remoteMode) toast("Új klienst a regisztrációs oldalon lehet létrehozni."); else openModal(); });
   document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); }));
@@ -212,10 +254,23 @@ function bindEvents() {
   document.querySelector("#manage-trainers")?.addEventListener("click", () => openModal(renderTrainerAssignmentModal(selectedClient())));
   document.querySelectorAll("[data-workout-index]").forEach((button) => button.addEventListener("click", () => openModal(renderWorkoutModalForUser(selectedClient(), selectedClient().workouts[Number(button.dataset.workoutIndex)], button.dataset.workoutIndex))));
   document.querySelector("#edit-profile")?.addEventListener("click", () => openModal(currentUser()));
+  document.querySelector("#add-trainer")?.addEventListener("click", () => openModal(renderTrainerModal()));
+  document.querySelectorAll(".btn-delete-trainer").forEach((button) => button.addEventListener("click", () => deleteTrainer(button.dataset.trainerId)));
   if (currentUser()?.role === "client" && !document.querySelector("#add-workout")) {
     const action = document.createElement("button"); action.className = "btn btn-ghost"; action.id = "add-workout"; action.textContent = "+ Egyéni edzés"; document.querySelector(".topbar")?.append(action);
   }
   document.querySelector("#client-search")?.addEventListener("input", (event) => { const needle = event.target.value.toLowerCase(); const filtered = data.users.filter((user) => user.role === "client" && `${user.name} ${user.email}`.toLowerCase().includes(needle)); document.querySelector("#client-table").innerHTML = renderClientTable(filtered); document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); })); });
+}
+
+function openForgotPassword() {
+  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">FORM <span>&</span> FUNCTION</div><div><h1>Újra hozzáférsz.</h1><p>Add meg az e-mail-címedet, és küldünk egy biztonságos jelszó-visszaállító linket.</p></div><div class="art-footer"><button class="text-button" style="color:var(--teal)" id="back-login">Vissza a bejelentkezéshez</button></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Jelszó visszaállítása</div><h2>Új jelszó kérése</h2><p>A linket az e-mail-fiókodba küldjük.</p><form id="forgot-form"><div class="field"><label for="forgot-email">E-mail-cím</label><input id="forgot-email" type="email" required /></div><div class="auth-actions"><button type="button" class="text-button" id="back-login-2">Mégse</button><button class="btn btn-dark">Link küldése</button></div></form></div></section></main>`;
+  document.querySelectorAll("#back-login, #back-login-2").forEach((button) => button.addEventListener("click", render));
+  document.querySelector("#forgot-form").addEventListener("submit", async (event) => { event.preventDefault(); try { await window.remoteStore.requestPasswordReset(document.querySelector("#forgot-email").value.trim()); toast("A visszaállító linket elküldtük."); } catch (error) { toast(`Nem sikerült elküldeni: ${error.message}`); } });
+}
+
+function renderPasswordReset() {
+  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">FORM <span>&</span> FUNCTION</div><div><h1>Válassz új jelszót.</h1><p>Az új jelszóval ismét biztonságosan beléphetsz.</p></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Jelszó visszaállítása</div><h2>Új jelszó</h2><p>Legalább 8 karaktert használj.</p><form id="reset-form"><div class="field"><label for="reset-password">Új jelszó</label><input id="reset-password" type="password" minlength="8" required /></div><button class="btn btn-dark" type="submit">Jelszó mentése</button></form></div></section></main>`;
+  document.querySelector("#reset-form").addEventListener("submit", async (event) => { event.preventDefault(); try { await window.remoteStore.updatePassword(document.querySelector("#reset-password").value); window.history.replaceState({}, "", window.location.pathname); toast("A jelszó frissítve."); render(); } catch (error) { toast(`Nem sikerült menteni: ${error.message}`); } });
 }
 
 function openRegistration() {
