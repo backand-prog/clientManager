@@ -20,6 +20,7 @@ let data = loadData();
 let session = localStorage.getItem(SESSION_KEY);
 let currentView = "overview";
 let selectedClientId = null;
+let remoteMode = Boolean(window.remoteStore?.enabled);
 
 function loadData() {
   try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
@@ -34,6 +35,45 @@ function initials(name) { return name.split(" ").map((part) => part[0]).join("")
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function toast(message) { const region = document.querySelector("#toast-region"); region.innerHTML = `<div class="toast">${escapeHtml(message)}</div>`; setTimeout(() => { region.innerHTML = ""; }, 3000); }
 function formatDate() { return new Intl.DateTimeFormat("hu-HU", { year: "numeric", month: "short", day: "numeric" }).format(new Date()); }
+
+async function refreshRemote() {
+  if (!remoteMode) return;
+  try {
+    const remoteData = await window.remoteStore.load();
+    if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); render(); }
+  } catch (error) { toast(`Adatbázis-hiba: ${error.message}`); }
+}
+
+async function initializeRemote() {
+  if (!remoteMode) return;
+  try {
+    const remoteData = await window.remoteStore.load();
+    if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); render(); }
+    else { session = null; localStorage.removeItem(SESSION_KEY); render(); }
+  } catch (error) { remoteMode = false; toast(`A Supabase nem érhető el: ${error.message}`); }
+}
+
+async function remoteLogin(event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const email = document.querySelector("#email").value.trim().toLowerCase();
+  const password = document.querySelector("#password").value;
+  try { const remoteData = await window.remoteStore.signIn(email, password); data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); currentView = remoteData.users.find((user) => user.id === session)?.role === "admin" ? "overview" : remoteData.users.find((user) => user.id === session)?.role === "trainer" ? "trainer-home" : "profile"; render(); }
+  catch (error) { toast("Sikertelen bejelentkezés: ellenőrizd az e-mail-címet és a jelszót."); }
+}
+
+async function remoteRegister(event) {
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+  try {
+    const user = await window.remoteStore.signUp(values);
+    if (!user) throw new Error("A regisztráció nem indult el.");
+    if (!user.email_confirmed_at) toast("A fiók létrejött. Erősítsd meg az e-mail-címedet, majd jelentkezz be.");
+    else toast("A fiók létrejött.");
+    render();
+  } catch (error) { toast(`Sikertelen regisztráció: ${error.message}`); }
+}
 
 function render() {
   document.querySelector("#app").innerHTML = session && currentUser() ? renderDashboard(currentUser()) : renderAuth();
@@ -140,29 +180,31 @@ function bindModalEvents() {
     const values = Object.fromEntries(formData.entries()); values.adherence = Number(values.adherence) || 0;
     if (id) Object.assign(data.users.find((user) => user.id === id), values);
     else { data.users.push({ ...values, id: `client-${Date.now()}`, role: "client", password: "welcome123", joined: formatDate(), sessions: 0, workouts: [] }); data.activities.unshift({ text: `${values.name} új kliensként hozzáadva`, time: "Most", mark: initials(values.name) }); }
+    if (remoteMode && id) window.remoteStore.updateProfile(data.users.find((user) => user.id === id)).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`));
     saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(id ? "Kliensadatok frissítve" : "Kliens sikeresen hozzáadva");
   });
   document.querySelector("#workout-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); values.duration = Number(values.duration) || 0; const client = selectedClient(); client.workouts ||= []; const index = event.currentTarget.dataset.index;
     if (values.trainerId === "solo") values.trainerId = "";
     if (index === "") client.workouts.push(values); else client.workouts[Number(index)] = values;
-    client.sessions = client.workouts.filter((workout) => workout.status === "Teljesítve").length; saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(index === "" ? "Edzés hozzáadva" : "Edzés frissítve");
+    client.sessions = client.workouts.filter((workout) => workout.status === "Teljesítve").length; if (remoteMode) window.remoteStore.saveWorkout(client.id, values, index === "" ? "" : client.workouts[Number(index)].id).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(index === "" ? "Edzés hozzáadva" : "Edzés frissítve");
   });
   document.querySelector("#trainer-assignment-form")?.addEventListener("submit", (event) => {
-    event.preventDefault(); selectedClient().trainerIds = new FormData(event.currentTarget).getAll("trainerIds"); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast("Edzői kapcsolatok frissítve");
+    event.preventDefault(); selectedClient().trainerIds = new FormData(event.currentTarget).getAll("trainerIds"); if (remoteMode) window.remoteStore.updateAssignments(selectedClient().id, selectedClient().trainerIds).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast("Edzői kapcsolatok frissítve");
   });
 }
 
 function bindEvents() {
+  if (remoteMode) document.querySelector("#login-form")?.addEventListener("submit", remoteLogin, { capture: true });
   document.querySelector("#login-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); const email = document.querySelector("#email").value.trim().toLowerCase(); const password = document.querySelector("#password").value;
     const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
     if (!user) return toast("Az e-mail-cím vagy a jelszó hibás."); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = user.role === "admin" ? "overview" : "profile"; render();
   });
   document.querySelector("#show-register")?.addEventListener("click", () => openRegistrationV2());
-  document.querySelector("#logout")?.addEventListener("click", () => { session = null; localStorage.removeItem(SESSION_KEY); render(); });
+  document.querySelector("#logout")?.addEventListener("click", async () => { if (remoteMode) await window.remoteStore.signOut(); session = null; localStorage.removeItem(SESSION_KEY); render(); });
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { currentView = button.dataset.view; render(); }));
-  document.querySelector("#add-client")?.addEventListener("click", () => openModal());
+  document.querySelector("#add-client")?.addEventListener("click", () => { if (remoteMode) toast("Új klienst a regisztrációs oldalon lehet létrehozni."); else openModal(); });
   document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); }));
   document.querySelector("#edit-client")?.addEventListener("click", () => openModal(selectedClient()));
   document.querySelector("#add-workout")?.addEventListener("click", () => openModal(renderWorkoutModalForUser(currentUser().role === "client" ? currentUser() : selectedClient())));
@@ -189,12 +231,13 @@ function renderClientContent(user) {
 }
 
 render();
-render();
+initializeRemote();
 
 function openRegistrationV2() {
   document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">FORM <span>&</span> FUNCTION</div><div><h1>Az új fejezeted itt kezdődik.</h1><p>Regisztrálj kliensként vagy edzőként, és kezdd el használni a saját munkateredet.</p></div><div class="art-footer">Már van fiókod? <button class="text-button" style="color:var(--teal)" id="back-login">Bejelentkezés</button></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Regisztráció</div><h2>Fiók létrehozása</h2><p>Válaszd ki, hogyan szeretnéd használni az alkalmazást.</p><form id="register-form"><div class="field"><label for="reg-role">Szerepkör</label><select id="reg-role" name="role"><option value="client">Kliensként regisztrálok</option><option value="trainer">Edzőként regisztrálok</option></select></div><div class="field"><label for="reg-name">Teljes név</label><input id="reg-name" name="name" required /></div><div class="field"><label for="reg-email">E-mail-cím</label><input id="reg-email" name="email" type="email" required /></div><div class="field"><label for="reg-password">Jelszó létrehozása</label><input id="reg-password" name="password" type="password" minlength="6" required /></div><div class="field" id="reg-goal-field"><label for="reg-goal">Min szeretnél dolgozni?</label><input id="reg-goal" name="goal" required placeholder="pl. Erősebb és mozgékonyabb szeretnék lenni" /></div><div class="field" id="reg-specialty-field" style="display:none"><label for="reg-specialty">Szakterület</label><input id="reg-specialty" name="specialty" placeholder="pl. Erőnléti edzés" /></div><div class="auth-actions"><button type="button" class="text-button" id="back-login-2">Vissza a bejelentkezéshez</button><button class="btn btn-dark">Regisztráció</button></div></form></div></section></main>`;
   const roleSelect = document.querySelector("#reg-role");
   roleSelect.addEventListener("change", () => { const trainer = roleSelect.value === "trainer"; document.querySelector("#reg-goal-field").style.display = trainer ? "none" : "block"; document.querySelector("#reg-goal").required = !trainer; document.querySelector("#reg-specialty-field").style.display = trainer ? "block" : "none"; });
   document.querySelectorAll("#back-login, #back-login-2").forEach((button) => button.addEventListener("click", render));
+  if (remoteMode) document.querySelector("#register-form")?.addEventListener("submit", remoteRegister, { capture: true });
   document.querySelector("#register-form").addEventListener("submit", (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); if (data.users.some((user) => user.email.toLowerCase() === values.email.toLowerCase())) return toast("Ezzel az e-mail-címmel már létezik fiók."); const isTrainer = values.role === "trainer"; const user = { ...values, id: `${values.role}-${Date.now()}`, status: "Aktív", joined: formatDate(), sessions: 0, adherence: 0, trainerIds: [], workouts: [], ...(isTrainer ? { specialty: values.specialty || "Általános edzés" } : { nextSession: "Nincs beütemezve", notes: "Új kliens - bevezető edzés beütemezése szükséges." }) }; data.users.push(user); data.activities.unshift({ text: `${user.name} új ${isTrainer ? "edzőként" : "kliensként"} regisztrált`, time: "Most", mark: initials(user.name) }); saveData(); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = isTrainer ? "trainer-home" : "profile"; render(); toast(isTrainer ? "Edzői fiók létrehozva" : "Kliensfiók létrehozva"); });
 }

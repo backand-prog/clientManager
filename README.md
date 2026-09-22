@@ -13,11 +13,11 @@ Első verziós klienskezelő személyi edzők számára.
 - Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal, státusszal és edzővel
 - Egyéni, edző nélküli edzések naplózása
 - Kliensregisztráció és saját profil-/fejlődésnézet
-- Böngészőben tárolt adatok `localStorage` segítségével
+- Supabase PostgreSQL adattárolás és Supabase Auth, helyi fallbackkel fejlesztéshez
 
 ## Adatbázis: Supabase PostgreSQL
 
-A megbízható éles használathoz a projekt tartalmazza a Supabase PostgreSQL sémát és a szerepkör-alapú RLS jogosultságokat a `supabase-schema.sql` fájlban.
+A projekt a beállított Supabase PostgreSQL adatbázist és Supabase Auth hitelesítést használja. A `localStorage` csak akkor marad használatban, ha nincs működő Supabase-konfiguráció.
 
 Beállítás:
 
