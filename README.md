@@ -5,10 +5,13 @@ Első verziós klienskezelő személyi edzők számára.
 ## Funkciók
 
 - Magyar nyelvű adminisztrátori áttekintő
+- Edzői szerepkör és edzői regisztráció
+- Több edző hozzárendelése ugyanahhoz a klienshez, kapcsolat leválasztásával
 - Klienslista kereséssel, állapottal, teljesítéssel és edzői megjegyzésekkel
 - Kliensprofilok hozzáadása és szerkesztése
 - Kliensenkénti edzéslista az adminisztrátor számára
-- Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal és státusszal
+- Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal, státusszal és edzővel
+- Egyéni, edző nélküli edzések naplózása
 - Kliensregisztráció és saját profil-/fejlődésnézet
 - Böngészőben tárolt adatok `localStorage` segítségével
 
