@@ -2,7 +2,7 @@
 
 Első verziós klienskezelő személyi edzők számára.
 
-## Included
+## Funkciók
 
 - Magyar nyelvű adminisztrátori áttekintő
 - Klienslista kereséssel, állapottal, teljesítéssel és edzői megjegyzésekkel
@@ -12,14 +12,14 @@ Első verziós klienskezelő személyi edzők számára.
 - Kliensregisztráció és saját profil-/fejlődésnézet
 - Böngészőben tárolt adatok `localStorage` segítségével
 
-## Run locally
+## Helyi futtatás
 
 Nyisd meg az `index.html` fájlt böngészőben. Nincs szükség build lépésre.
 
 Demo hozzáférések:
 
 - Admin: `admin@formfunction.test` / `admin123`
-- Client: `maya@example.com` / `client123`
+- Kliens: `maya@example.com` / `client123`
 
 ## Fontos
 
