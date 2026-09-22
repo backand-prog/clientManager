@@ -100,7 +100,6 @@ function renderAuth() {
     <section class="auth-panel"><div class="auth-card">
       <div class="eyebrow">Edzői munkatér</div><h2>Üdv újra</h2><p>Jelentkezz be a praxisod kezeléséhez.</p>
       <form id="login-form"><div class="field"><label for="email">E-mail-cím</label><input id="email" type="email" required placeholder="te@example.com" /></div><div class="field"><label for="password">Jelszó</label><input id="password" type="password" required placeholder="Írd be a jelszavad" /></div><div class="auth-actions"><button type="button" class="text-button" id="show-register">Regisztráció</button><button class="btn btn-dark" type="submit">Bejelentkezés</button></div></form>
-      <div class="demo-box"><strong>Demo hozzáférés</strong><br />Admin: admin@formfunction.test / admin123<br />Kliens: maya@example.com / client123</div>
     </div></section>
   </main>`;
 }
