@@ -1,25 +1,26 @@
-# Form & Function Client Manager
+# Form & Function klienskezelő
 
-A first-iteration client management workspace for fitness coaching.
+Első verziós klienskezelő személyi edzők számára.
 
 ## Included
 
-- Admin sign-in with an overview dashboard
-- Client list with search, status, adherence, and coach notes
-- Add and edit client records
-- Client registration
-- Client-only profile and progress view
-- Browser persistence with `localStorage`
+- Magyar nyelvű adminisztrátori áttekintő
+- Klienslista kereséssel, állapottal, teljesítéssel és edzői megjegyzésekkel
+- Kliensprofilok hozzáadása és szerkesztése
+- Kliensenkénti edzéslista az adminisztrátor számára
+- Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal és státusszal
+- Kliensregisztráció és saját profil-/fejlődésnézet
+- Böngészőben tárolt adatok `localStorage` segítségével
 
 ## Run locally
 
-Open `index.html` in a browser. No build step is required.
+Nyisd meg az `index.html` fájlt böngészőben. Nincs szükség build lépésre.
 
-Demo accounts:
+Demo hozzáférések:
 
 - Admin: `admin@formfunction.test` / `admin123`
 - Client: `maya@example.com` / `client123`
 
-## Important
+## Fontos
 
-This prototype stores account data in the browser and is intended for workflow validation only. Before using real client data, add a secure backend, server-side authentication, password hashing, authorization checks, encrypted transport, and a proper database.
+Ez a prototípus a fiókadatokat a böngészőben tárolja, és csak a munkafolyamat ellenőrzésére szolgál. Valós kliensadatok használata előtt szükséges biztonságos backend, szerveroldali hitelesítés, jelszó-hash-elés, jogosultság-ellenőrzés, titkosított adatátvitel és valódi adatbázis.
