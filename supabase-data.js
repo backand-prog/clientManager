@@ -18,17 +18,22 @@
 
   async function load() {
     if (!enabled) return null;
-    const { data: authData } = await client.auth.getUser();
+    const { data: authData, error } = await client.auth.getUser();
+    if (error) throw error;
     const user = authData?.user;
     if (!user) return null;
-    const [profilesResult, assignmentsResult, workoutsResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult] = await Promise.all([
       client.from("profiles").select("*").order("created_at"),
       client.from("client_trainers").select("client_id, trainer_id"),
-      client.from("workouts").select("*").order("workout_date", { ascending: false })
+      client.from("workouts").select("*").order("workout_date", { ascending: false }),
+      client.from("connection_requests").select("*").order("created_at", { ascending: false }),
+      client.from("connection_notifications").select("*").order("created_at", { ascending: false }).limit(30)
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
     if (workoutsResult.error) throw workoutsResult.error;
+    if (requestsResult.error) throw requestsResult.error;
+    if (notificationsResult.error) throw notificationsResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
     return {
@@ -51,7 +56,25 @@
           workouts: ownWorkouts
         };
       }),
-      activities: []
+      activities: [],
+      connectionRequests: (requestsResult.data || []).map((request) => ({
+        id: request.id,
+        requesterId: request.requester_id,
+        recipientId: request.recipient_id,
+        requesterName: request.requester_name,
+        recipientName: request.recipient_name,
+        status: request.status,
+        createdAt: request.created_at
+      })),
+      notifications: (notificationsResult.data || []).map((notification) => ({
+        id: notification.id,
+        userId: notification.user_id,
+        requestId: notification.request_id,
+        kind: notification.kind,
+        message: notification.message,
+        createdAt: notification.created_at,
+        readAt: notification.read_at
+      }))
     };
   }
 
@@ -96,6 +119,24 @@
     if (result.error) throw result.error;
   }
 
+  async function createConnectionRequest(email) {
+    if (!enabled) return;
+    const result = await client.rpc("create_connection_request", { target_email: email });
+    if (result.error) throw result.error;
+  }
+
+  async function respondConnectionRequest(requestId, decision) {
+    if (!enabled) return;
+    const result = await client.rpc("respond_connection_request", { request_id: requestId, decision });
+    if (result.error) throw result.error;
+  }
+
+  async function markConnectionNotificationsRead() {
+    if (!enabled) return;
+    const result = await client.rpc("mark_connection_notifications_read");
+    if (result.error) throw result.error;
+  }
+
   async function signOut() {
     if (enabled) await client.auth.signOut();
   }
@@ -120,5 +161,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, signOut, accountAdmin, requestPasswordReset, updatePassword };
+  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, createConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, signOut, accountAdmin, requestPasswordReset, updatePassword };
 })();

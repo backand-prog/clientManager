@@ -9,6 +9,8 @@ const seedData = {
     { id: "client-2", role: "client", name: "Leo Martins", email: "leo@example.com", password: "client123", trainerIds: ["trainer-1"], goal: "Visszatérés a futáshoz", status: "Aktív", joined: "2026. febr. 03.", sessions: 12, adherence: 74, nextSession: "Csütörtök, 18:30", notes: "Óvatos visszatérés a hosszabb kihagyás után.", workouts: [{ date: "2026. márc. 19.", time: "18:30", type: "Futótechnika", duration: 45, status: "Teljesítve", trainerId: "trainer-1", notes: "" }] },
     { id: "client-3", role: "client", name: "Sofia Patel", email: "sofia@example.com", password: "client123", trainerIds: [], goal: "Testkompozíció", status: "Szüneteltetve", joined: "2025. nov. 18.", sessions: 24, adherence: 91, nextSession: "Nincs beütemezve", notes: "Rövid utazási szüneten van.", workouts: [] }
   ],
+  connectionRequests: [],
+  notifications: [],
   activities: [
     { text: "Maya Chen teljesített egy edzést", time: "Ma, 08:42", mark: "MC" },
     { text: "Leo Martins frissítette a profilját", time: "Tegnap, 17:20", mark: "LM" },
@@ -23,11 +25,21 @@ let selectedClientId = null;
 let remoteMode = Boolean(window.remoteStore?.enabled);
 
 function loadData() {
-  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
+  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
   catch { return structuredClone(seedData); }
 }
 function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
 function currentUser() { return data.users.find((user) => user.id === session); }
+function findLocalLoginUser(email, password) {
+  const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
+  if (user) return user;
+  const demoUser = seedData.users.find((item) => item.email.toLowerCase() === email && item.password === password);
+  if (!demoUser) return null;
+  const existingIndex = data.users.findIndex((item) => item.id === demoUser.id);
+  if (existingIndex < 0) data.users.push(structuredClone(demoUser));
+  else data.users[existingIndex] = structuredClone(demoUser);
+  return data.users.find((item) => item.id === demoUser.id);
+}
 function selectedClient() { return data.users.find((user) => user.id === selectedClientId); }
 function trainers() { return data.users.filter((user) => user.role === "trainer"); }
 function trainerName(id) { return trainers().find((trainer) => trainer.id === id)?.name || "Egyéni edzés"; }
@@ -35,6 +47,58 @@ function initials(name) { return name.split(" ").map((part) => part[0]).join("")
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function toast(message) { const region = document.querySelector("#toast-region"); region.innerHTML = `<div class="toast">${escapeHtml(message)}</div>`; setTimeout(() => { region.innerHTML = ""; }, 3000); }
 function formatDate() { return new Intl.DateTimeFormat("hu-HU", { year: "numeric", month: "short", day: "numeric" }).format(new Date()); }
+
+function addLocalNotification(userId, requestId, kind, message) {
+  data.notifications.unshift({ id: `notification-${Date.now()}-${Math.random()}`, userId, requestId, kind, message, createdAt: new Date().toISOString(), readAt: null });
+}
+
+function renderConnectionCenter(user) {
+  const requests = data.connectionRequests || [];
+  const notifications = (data.notifications || []).filter((item) => item.userId === user.id);
+  const pending = requests.filter((request) => request.recipientId === user.id && request.status === "pending");
+  const sent = requests.filter((request) => request.requesterId === user.id).slice(0, 5);
+  const canRequest = user.role === "client" || user.role === "trainer";
+  const requestLabel = user.role === "client" ? "Edző megkeresése e-mail-cím alapján" : "Kliens hozzáadása e-mail-cím alapján";
+  return `<section class="panel connection-center"><div class="panel-head"><div><h2>Kapcsolatok és értesítések</h2><p class="muted">A kapcsolat csak a címzett jóváhagyása után jön létre.</p></div><button class="text-button" id="mark-notifications-read" ${notifications.some((item) => !item.readAt) ? "" : "disabled"}>Értesítések olvasottnak jelölése</button></div>
+    ${canRequest ? `<form id="connection-request-form" class="search-row"><input id="connection-email" type="email" placeholder="Regisztrált ${user.role === "client" ? "edző" : "kliens"} e-mail-címe" required /><button class="btn btn-teal" type="submit">${requestLabel}</button></form>` : ""}
+    ${pending.length ? `<h3>Jóváhagyásra vár</h3>${pending.map((request) => `<div class="connection-row"><div><strong>${escapeHtml(request.requesterName)}</strong><p>${user.role === "trainer" ? "Ez a kliens szeretne hozzád kapcsolódni." : "Ez az edző szeretne kliensként hozzáadni."}</p></div><button class="btn btn-teal" data-connection-decision="approved" data-request-id="${escapeHtml(request.id)}">Jóváhagyás</button><button class="btn btn-ghost" data-connection-decision="declined" data-request-id="${escapeHtml(request.id)}">Elutasítás</button></div>`).join("")}` : ""}
+    ${sent.length ? `<h3>Elküldött kérések</h3>${sent.map((request) => `<div class="connection-row"><div><strong>${escapeHtml(request.recipientName)}</strong><p>${request.status === "pending" ? "Válaszra vár" : request.status === "approved" ? "Jóváhagyva" : "Elutasítva"} · ${escapeHtml(request.createdAt ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(request.createdAt)) : "")}</p></div></div>`).join("")}` : ""}
+    <h3>Értesítések</h3>${notifications.length ? notifications.slice(0, 8).map((item) => `<div class="activity ${item.readAt ? "" : "notification-unread"}"><div class="activity-mark">${item.readAt ? "✓" : "!"}</div><p>${escapeHtml(item.message)}<small>${escapeHtml(item.createdAt ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt)) : "")}</small></p></div>`).join("") : `<div class="empty-state">Még nincsenek értesítéseid.</div>`}
+  </section>`;
+}
+
+function createLocalConnectionRequest(actor, email) {
+  const target = data.users.find((item) => item.email?.toLowerCase() === email && item.role !== "admin");
+  if (!target) throw new Error("Nem található ilyen e-mail-című regisztrált edző vagy kliens.");
+  if (target.id === actor.id) throw new Error("Saját magadnak nem küldhetsz kapcsolódási kérést.");
+  const validPair = (actor.role === "client" && target.role === "trainer") || (actor.role === "trainer" && target.role === "client");
+  if (!validPair) throw new Error("Kliens csak edzőt, edző csak klienst kereshet meg.");
+  const client = actor.role === "client" ? actor : target;
+  const trainer = actor.role === "trainer" ? actor : target;
+  if ((client.trainerIds || []).includes(trainer.id)) throw new Error("Ez a kliens már ehhez az edzőhöz van rendelve.");
+  if (data.connectionRequests.some((request) => request.status === "pending" && ((request.requesterId === actor.id && request.recipientId === target.id) || (request.requesterId === target.id && request.recipientId === actor.id)))) {
+    throw new Error("Ehhez a felhasználóhoz már van függőben lévő kérés.");
+  }
+  const request = { id: `request-${Date.now()}-${Math.random()}`, requesterId: actor.id, recipientId: target.id, requesterName: actor.name, recipientName: target.name, status: "pending", createdAt: new Date().toISOString() };
+  data.connectionRequests.unshift(request);
+  addLocalNotification(target.id, request.id, "request_received", `${actor.name} kapcsolódási kérést küldött.`);
+  addLocalNotification(actor.id, request.id, "request_sent", `A kapcsolódási kérésed elküldve ${target.name} részére.`);
+}
+
+function respondLocalConnectionRequest(actor, requestId, decision) {
+  const request = data.connectionRequests.find((item) => item.id === requestId && item.recipientId === actor.id && item.status === "pending");
+  if (!request) throw new Error("A kérés már nem elérhető.");
+  request.status = decision;
+  request.respondedAt = new Date().toISOString();
+  if (decision === "approved") {
+    const client = data.users.find((item) => item.id === (actor.role === "client" ? actor.id : request.requesterId));
+    const trainerId = actor.role === "trainer" ? actor.id : request.requesterId;
+    if (client && !client.trainerIds.includes(trainerId)) client.trainerIds.push(trainerId);
+  }
+  const result = decision === "approved" ? "jóváhagyta" : "elutasította";
+  addLocalNotification(request.requesterId, request.id, `request_${decision}`, `${actor.name} ${result} a kapcsolódási kérésedet.`);
+  addLocalNotification(request.recipientId, request.id, `request_${decision}`, `${request.requesterName} kapcsolódási kérését ${result}.`);
+}
 
 async function refreshRemote() {
   if (!remoteMode) return;
@@ -51,7 +115,13 @@ async function initializeRemote() {
     const remoteData = await window.remoteStore.load();
     if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); render(); }
     else { session = null; localStorage.removeItem(SESSION_KEY); render(); }
-  } catch (error) { remoteMode = false; toast(`A Supabase nem érhető el: ${error.message}`); }
+  } catch (error) {
+    remoteMode = false;
+    session = null;
+    localStorage.removeItem(SESSION_KEY);
+    render();
+    toast(`A Supabase nem érhető el, helyi demo mód aktív: ${error.message}`);
+  }
 }
 
 async function remoteLogin(event) {
@@ -60,7 +130,28 @@ async function remoteLogin(event) {
   const email = document.querySelector("#email").value.trim().toLowerCase();
   const password = document.querySelector("#password").value;
   try { const remoteData = await window.remoteStore.signIn(email, password); data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); currentView = remoteData.users.find((user) => user.id === session)?.role === "admin" ? "overview" : remoteData.users.find((user) => user.id === session)?.role === "trainer" ? "trainer-home" : "profile"; render(); }
-  catch (error) { toast("Sikertelen bejelentkezés: ellenőrizd az e-mail-címet és a jelszót."); }
+  catch (error) {
+    const localUser = findLocalLoginUser(email, password);
+    if (localUser) {
+      remoteMode = false;
+      session = localUser.id;
+      localStorage.setItem(SESSION_KEY, session);
+      currentView = localUser.role === "admin" ? "overview" : "profile";
+      render();
+      toast("Helyi demo fiókkal jelentkeztél be.");
+      return;
+    }
+    const networkFailure = error instanceof TypeError || /failed to fetch|fetch failed|networkerror|err_name_not_resolved/i.test(String(error?.message || error));
+    if (networkFailure) {
+      remoteMode = false;
+      session = null;
+      localStorage.removeItem(SESSION_KEY);
+      render();
+      toast("A Supabase nem érhető el. Helyi demo mód aktív; próbáld a README-ben szereplő demo hozzáférést.");
+      return;
+    }
+    toast("Sikertelen bejelentkezés: ellenőrizd az e-mail-címet és a jelszót.");
+  }
 }
 
 async function remoteRegister(event) {
@@ -107,7 +198,7 @@ function renderAuth() {
 function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
-  return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">FORM <span>&</span> FUNCTION</div>${isAdmin ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button>` : isTrainer ? `<div class="nav-label">Edzői tér</div><button class="nav-btn active" data-view="trainer-home">Saját kliensek</button>` : `<div class="nav-label">Saját tér</div><button class="nav-btn active" data-view="profile">Profilom</button>`}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${isAdmin ? renderAdminContent() : isTrainer ? (currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)) : renderClientContent(user)}</section></main>`;
+  return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">FORM <span>&</span> FUNCTION</div>${isAdmin ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button>` : isTrainer ? `<div class="nav-label">Edzői tér</div><button class="nav-btn active" data-view="trainer-home">Saját kliensek</button>` : `<div class="nav-label">Saját tér</div><button class="nav-btn active" data-view="profile">Profilom</button>`}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderConnectionCenter(user)}${isAdmin ? renderAdminContent() : isTrainer ? (currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)) : renderClientContent(user)}</section></main>`;
 }
 
 function renderTrainerContent(trainer) {
@@ -236,7 +327,7 @@ function bindEvents() {
   }
   document.querySelector("#login-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); const email = document.querySelector("#email").value.trim().toLowerCase(); const password = document.querySelector("#password").value;
-    const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
+    const user = findLocalLoginUser(email, password);
     if (!user) return toast("Az e-mail-cím vagy a jelszó hibás."); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = user.role === "admin" ? "overview" : "profile"; render();
   });
   document.querySelector("#show-register")?.addEventListener("click", () => openRegistrationV2());
@@ -245,6 +336,54 @@ function bindEvents() {
     if (!document.querySelector("#delete-account")) { const button = document.createElement("button"); button.id = "delete-account"; button.className = "nav-btn btn-danger"; button.textContent = "Fiók törlése"; document.querySelector(".sidebar")?.append(button); button.addEventListener("click", deleteCurrentAccount); }
   }
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { currentView = button.dataset.view; render(); }));
+  document.querySelector("#connection-request-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const email = document.querySelector("#connection-email").value.trim().toLowerCase();
+    try {
+      if (remoteMode) {
+        await window.remoteStore.createConnectionRequest(email);
+        await refreshRemote();
+      } else {
+        createLocalConnectionRequest(currentUser(), email);
+        saveData();
+        render();
+      }
+      toast("A kapcsolódási kérés elküldve.");
+    } catch (error) {
+      toast(`Nem sikerült elküldeni a kérést: ${error.message}`);
+    }
+  });
+  document.querySelectorAll("[data-connection-decision]").forEach((button) => button.addEventListener("click", async () => {
+    const requestId = button.dataset.requestId;
+    const decision = button.dataset.connectionDecision;
+    try {
+      if (remoteMode) {
+        await window.remoteStore.respondConnectionRequest(requestId, decision);
+        await refreshRemote();
+      } else {
+        respondLocalConnectionRequest(currentUser(), requestId, decision);
+        saveData();
+        render();
+      }
+      toast(decision === "approved" ? "A kapcsolat jóváhagyva." : "A kérés elutasítva.");
+    } catch (error) {
+      toast(`Nem sikerült frissíteni a kérést: ${error.message}`);
+    }
+  }));
+  document.querySelector("#mark-notifications-read")?.addEventListener("click", async () => {
+    try {
+      if (remoteMode) {
+        await window.remoteStore.markConnectionNotificationsRead();
+        await refreshRemote();
+      } else {
+        data.notifications.filter((item) => item.userId === currentUser().id && !item.readAt).forEach((item) => { item.readAt = new Date().toISOString(); });
+        saveData();
+        render();
+      }
+    } catch (error) {
+      toast(`Nem sikerült frissíteni az értesítéseket: ${error.message}`);
+    }
+  });
   document.querySelector("#add-client")?.addEventListener("click", () => { if (remoteMode) toast("Új klienst a regisztrációs oldalon lehet létrehozni."); else openModal(); });
   document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); }));
   document.querySelector("#edit-client")?.addEventListener("click", () => openModal(selectedClient()));
