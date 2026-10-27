@@ -11,6 +11,7 @@ const seedData = {
   ],
   connectionRequests: [],
   notifications: [],
+  coachProfiles: [{ id: "trainer-1", name: "Nagy Anna", specialty: "Erőnléti edzés", bio: "Személyre szabott erőnléti edzéssel segítek, hogy magabiztosan és fenntarthatóan érd el a céljaidat.", photos: [] }],
   activities: [
     { text: "Maya Chen teljesített egy edzést", time: "Ma, 08:42", mark: "MC" },
     { text: "Leo Martins frissítette a profilját", time: "Tegnap, 17:20", mark: "LM" },
@@ -22,13 +23,143 @@ let data = loadData();
 let session = localStorage.getItem(SESSION_KEY);
 let currentView = "overview";
 let selectedClientId = null;
+let selectedCoachId = null;
 let remoteMode = Boolean(window.remoteStore?.enabled);
+let localPhotoDbPromise;
+
+function defaultViewFor(user) {
+  return user?.role === "admin" ? "overview" : user?.role === "trainer" ? "trainer-home" : "profile";
+}
+
+function routeForCurrentState() {
+  const user = currentUser();
+  if (!user) return "/";
+  if (user.role === "admin") {
+    if (currentView === "clients") return "/admin/clients";
+    if (currentView === "trainers") return "/admin/trainers";
+    if (currentView === "coach-profiles") return "/admin/coach-profiles";
+    if (currentView === "coach-profile-review") return `/admin/coach-profiles/${encodeURIComponent(selectedCoachId || "")}`;
+    if (currentView === "client-detail") return `/admin/clients/${encodeURIComponent(selectedClientId || "")}`;
+    return "/admin";
+  }
+  if (user.role === "trainer") {
+    if (currentView === "coach-profile") return "/coach/profile";
+    if (currentView === "client-detail") return `/coach/clients/${encodeURIComponent(selectedClientId || "")}`;
+    return "/coach/clients";
+  }
+  if (currentView === "coach-directory") return "/client/coaches";
+  if (currentView === "coach-profile-detail") return `/client/coaches/${encodeURIComponent(selectedCoachId || "")}`;
+  return "/client";
+}
+
+function syncRouteToUrl(replace = false) {
+  const route = `#${routeForCurrentState()}`;
+  if (window.location.hash === route) return;
+  const method = replace ? "replaceState" : "pushState";
+  window.history[method](null, "", route);
+}
+
+function navigateToView(view, { clientId = selectedClientId, coachId = selectedCoachId, replace = false } = {}) {
+  currentView = view;
+  selectedClientId = view === "client-detail" ? clientId : null;
+  selectedCoachId = ["coach-profile-detail", "coach-profile-review"].includes(view) ? coachId : null;
+  syncRouteToUrl(replace);
+  render();
+}
+
+function restoreRouteFromUrl() {
+  const user = currentUser();
+  if (!user) return;
+  const segments = window.location.hash.startsWith("#/") ? window.location.hash.slice(2).split("/").map((segment) => {
+    try { return decodeURIComponent(segment); }
+    catch { return ""; }
+  }) : [];
+  currentView = defaultViewFor(user);
+  selectedClientId = null;
+  selectedCoachId = null;
+
+  if (user.role === "admin") {
+    if (segments[0] === "admin" && segments[1] === "clients" && segments[2]) {
+      currentView = "client-detail";
+      selectedClientId = segments[2];
+    } else if (segments[0] === "admin" && segments[1] === "clients") currentView = "clients";
+    else if (segments[0] === "admin" && segments[1] === "trainers") currentView = "trainers";
+    else if (segments[0] === "admin" && segments[1] === "coach-profiles" && segments[2]) {
+      currentView = "coach-profile-review";
+      selectedCoachId = segments[2];
+    } else if (segments[0] === "admin" && segments[1] === "coach-profiles") currentView = "coach-profiles";
+    else if (segments[0] === "admin") currentView = "overview";
+  } else if (user.role === "trainer") {
+    if (segments[0] === "coach" && segments[1] === "profile") currentView = "coach-profile";
+    else if (segments[0] === "coach" && segments[1] === "clients" && segments[2]) {
+      currentView = "client-detail";
+      selectedClientId = segments[2];
+    } else if (segments[0] === "coach" && segments[1] === "clients") currentView = "trainer-home";
+  } else if (segments[0] === "client" && segments[1] === "coaches" && segments[2]) {
+    currentView = "coach-profile-detail";
+    selectedCoachId = segments[2];
+  } else if (segments[0] === "client" && segments[1] === "coaches") currentView = "coach-directory";
+  else if (segments[0] === "client") currentView = "profile";
+
+  syncRouteToUrl(true);
+}
+
+window.addEventListener("popstate", () => {
+  restoreRouteFromUrl();
+  render();
+});
+
+function openLocalPhotoDb() {
+  if (!("indexedDB" in window)) return Promise.reject(new Error("A böngésző nem támogatja a helyi képtárolást."));
+  if (!localPhotoDbPromise) {
+    localPhotoDbPromise = new Promise((resolve, reject) => {
+      const request = indexedDB.open("form-function-images", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("coach-photos");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error || new Error("Nem sikerült megnyitni a helyi képtárat."));
+    });
+  }
+  return localPhotoDbPromise;
+}
+
+async function localPhotoRequest(mode, operation) {
+  const db = await openLocalPhotoDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction("coach-photos", mode);
+    const request = operation(transaction.objectStore("coach-photos"));
+    let result;
+    request.onsuccess = () => { result = request.result; };
+    request.onerror = () => reject(request.error || new Error("Nem sikerült elérni a helyi képtárat."));
+    transaction.oncomplete = () => resolve(result);
+    transaction.onabort = () => reject(transaction.error || new Error("Nem sikerült menteni a helyi képet."));
+  });
+}
+
+async function restoreLocalCoachPhotos() {
+  for (const profile of data.coachProfiles || []) {
+    const photos = [];
+    for (const photo of profile.photos || []) {
+      const blob = await localPhotoRequest("readonly", (store) => store.get(photo.path));
+      if (blob) photos.push({ ...photo, url: URL.createObjectURL(blob) });
+    }
+    profile.photos = photos;
+  }
+}
 
 function loadData() {
-  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
+  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; if (!Array.isArray(stored.coachProfiles)) stored.coachProfiles = structuredClone(seedData.coachProfiles); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
   catch { return structuredClone(seedData); }
 }
-function saveData() { localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); }
+function saveData() {
+  const stored = remoteMode ? data : {
+    ...data,
+    coachProfiles: (data.coachProfiles || []).map((profile) => ({
+      ...profile,
+      photos: (profile.photos || []).map(({ path }) => ({ path }))
+    }))
+  };
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
+}
 function currentUser() { return data.users.find((user) => user.id === session); }
 function findLocalLoginUser(email, password) {
   const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
@@ -65,6 +196,66 @@ function renderConnectionCenter(user) {
     ${sent.length ? `<h3>Elküldött kérések</h3>${sent.map((request) => `<div class="connection-row"><div><strong>${escapeHtml(request.recipientName)}</strong><p>${request.status === "pending" ? "Válaszra vár" : request.status === "approved" ? "Jóváhagyva" : "Elutasítva"} · ${escapeHtml(request.createdAt ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(request.createdAt)) : "")}</p></div></div>`).join("")}` : ""}
     <h3>Értesítések</h3>${notifications.length ? notifications.slice(0, 8).map((item) => `<div class="activity ${item.readAt ? "" : "notification-unread"}"><div class="activity-mark">${item.readAt ? "✓" : "!"}</div><p>${escapeHtml(item.message)}<small>${escapeHtml(item.createdAt ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(item.createdAt)) : "")}</small></p></div>`).join("") : `<div class="empty-state">Még nincsenek értesítéseid.</div>`}
   </section>`;
+}
+
+function coachProfileFor(id) {
+  return (data.coachProfiles || []).find((profile) => profile.id === id);
+}
+
+function renderCoachProfileEditor(user) {
+  const profile = coachProfileFor(user.id) || { name: user.name, specialty: user.specialty || "", bio: "", photos: [] };
+  return `<div class="topbar"><div><div class="eyebrow">Edzői tér / Bemutatkozás</div><h1>Edzői bemutatkozás</h1><p>Oszd meg a tapasztalatodat, és mutasd meg a klienseknek, hogyan dolgozol.</p></div></div>
+    <section class="panel coach-profile-editor"><form id="coach-profile-form"><div class="field"><label for="coach-specialty">Szakterület</label><input id="coach-specialty" name="specialty" maxlength="120" value="${escapeHtml(profile.specialty || "")}" required /></div>
+      <div class="field"><label for="coach-bio">Bemutatkozás</label><textarea id="coach-bio" name="bio" maxlength="2000" required placeholder="Írd le a tapasztalatodat és az edzésmódszeredet...">${escapeHtml(profile.bio || "")}</textarea><small>Legfeljebb 2000 karakter.</small></div>
+      <div class="field"><label for="coach-photos">Képek (legfeljebb 5, egyenként legfeljebb 5 MB)</label><input id="coach-photos" name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple /><small>JPG, PNG vagy WebP. ${remoteMode ? "A képek csak bejelentkezett felhasználók számára láthatók." : "Helyi demo módban a képek ugyanabban a böngészőben maradnak elérhetők."}</small></div>
+      ${profile.photos?.length ? `<div class="coach-gallery">${profile.photos.map((photo) => `<div class="coach-gallery-item"><img src="${escapeHtml(photo.url)}" alt="${escapeHtml(profile.name)} edzésfotója" /><button class="btn btn-ghost" type="button" data-remove-coach-photo="${escapeHtml(photo.path)}">Kép törlése</button></div>`).join("")}</div>` : `<p class="muted">Még nem töltöttél fel képet.</p>`}
+      <button class="btn btn-teal" type="submit">Bemutatkozás mentése</button>
+    </form></section>`;
+}
+
+function renderCoachDirectory() {
+  const profiles = data.coachProfiles || [];
+  return `<div class="topbar"><div><div class="eyebrow">Felfedezés</div><h1>Edzők böngészése</h1><p>Ismerd meg az edzőket, majd küldj kapcsolódási kérést.</p></div></div>
+    ${profiles.length ? `<div class="coach-directory">${profiles.map((profile) => {
+      return `<article class="panel coach-card"><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div><button class="btn btn-teal coach-open-profile" type="button" data-coach-profile="${escapeHtml(profile.id)}">Edző profiljának megnyitása</button></article>`;
+    }).join("")}</div>` : `<section class="panel empty-state">Még nincs közzétett edzői bemutatkozás. Nézz vissza később.</section>`}`;
+}
+
+function renderAdminCoachProfiles() {
+  const profiles = data.coachProfiles || [];
+  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Edzői profilok</div><h1>Edzői profilok áttekintése</h1><p>Ellenőrizd az edzők bemutatkozását és feltöltött képeit.</p></div></div>
+    ${profiles.length ? `<div class="coach-directory">${profiles.map((profile) => `<article class="panel coach-card"><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div><button class="btn btn-teal coach-open-profile" type="button" data-coach-review="${escapeHtml(profile.id)}">Profil áttekintése</button></article>`).join("")}</div>` : `<section class="panel empty-state">Még nincs áttekinthető edzői profil.</section>`}`;
+}
+
+function renderCoachProfileDetail() {
+  const profile = coachProfileFor(selectedCoachId);
+  const isAdmin = currentUser()?.role === "admin";
+  const backView = isAdmin ? "coach-profiles" : "coach-directory";
+  const backLabel = isAdmin ? "Vissza az edzői profilokhoz" : "Vissza az edzőkhöz";
+  if (!profile) return `<div class="topbar"><button class="text-button" data-view="${backView}">← ${backLabel}</button></div><section class="panel empty-state">Ez az edzői profil már nem érhető el.</section>`;
+  const user = currentUser();
+  const request = isAdmin ? null : data.connectionRequests.find((item) => item.requesterId === user.id && item.recipientId === profile.id && item.status === "pending");
+  const connected = !isAdmin && (user.trainerIds || []).includes(profile.id);
+  const connectionAction = isAdmin
+    ? ""
+    : connected
+      ? `<span class="status status-active">Már a kapcsolataid között van</span>`
+      : request
+        ? `<span class="status status-paused">Kérés elküldve · válaszra vár</span>`
+        : `<button class="btn btn-teal" data-coach-request="${escapeHtml(profile.id)}">Kapcsolódási kérés küldése</button>`;
+  return `<div class="topbar"><button class="text-button" data-view="${backView}">← ${backLabel}</button></div>
+    <article class="panel coach-profile-detail">
+      <div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><div class="eyebrow">Edzői profil</div><h1>${escapeHtml(profile.name)}</h1><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>
+      <h2>Bemutatkozás</h2><p class="coach-bio">${escapeHtml(profile.bio || "Az edző hamarosan bővebb bemutatkozást ad hozzá.")}</p>
+      <h2>Képek</h2>${profile.photos?.length ? `<div class="coach-gallery coach-profile-gallery">${profile.photos.map((photo) => `<img src="${escapeHtml(photo.url)}" alt="${escapeHtml(profile.name)} edzésfotója" />`).join("")}</div>` : `<p class="muted">Ehhez a profilhoz még nem töltöttek fel képet.</p>`}
+      ${connectionAction}
+    </article>`;
+}
+
+function createLocalCoachRequest(actor, coachId) {
+  const coach = data.users.find((item) => item.id === coachId && item.role === "trainer");
+  if (!coach) throw new Error("Az edző nem található.");
+  createLocalConnectionRequest(actor, coach.email);
 }
 
 function createLocalConnectionRequest(actor, email) {
@@ -109,16 +300,44 @@ async function refreshRemote() {
 }
 
 async function initializeRemote() {
-  if (!remoteMode) return;
-  if (window.location.hash.includes("type=recovery")) { renderPasswordReset(); return; }
+  if (!remoteMode) {
+    try {
+      await restoreLocalCoachPhotos();
+      restoreRouteFromUrl();
+      render();
+    } catch (error) {
+      toast(`Nem sikerült betölteni a helyi képeket: ${error.message}`);
+    }
+    return;
+  }
+  if (window.location.search.includes("password-reset=1") || window.location.hash.includes("type=recovery")) { renderPasswordReset(); return; }
   try {
     const remoteData = await window.remoteStore.load();
-    if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); render(); }
-    else { session = null; localStorage.removeItem(SESSION_KEY); render(); }
+    if (remoteData) {
+      data = remoteData;
+      session = remoteData.sessionId;
+      localStorage.setItem(SESSION_KEY, session);
+      restoreRouteFromUrl();
+      render();
+    } else if (currentUser()) {
+      remoteMode = false;
+      await restoreLocalCoachPhotos();
+      restoreRouteFromUrl();
+      render();
+    } else {
+      session = null;
+      localStorage.removeItem(SESSION_KEY);
+      render();
+    }
   } catch (error) {
     remoteMode = false;
-    session = null;
-    localStorage.removeItem(SESSION_KEY);
+    if (!currentUser()) {
+      session = null;
+      localStorage.removeItem(SESSION_KEY);
+    }
+    try { await restoreLocalCoachPhotos(); }
+    catch (photoError) { toast(`Nem sikerült betölteni a helyi képeket: ${photoError.message}`); }
+    restoreRouteFromUrl();
     render();
     toast(`A Supabase nem érhető el, helyi demo mód aktív: ${error.message}`);
   }
@@ -129,14 +348,15 @@ async function remoteLogin(event) {
   event.stopImmediatePropagation();
   const email = document.querySelector("#email").value.trim().toLowerCase();
   const password = document.querySelector("#password").value;
-  try { const remoteData = await window.remoteStore.signIn(email, password); data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); currentView = remoteData.users.find((user) => user.id === session)?.role === "admin" ? "overview" : remoteData.users.find((user) => user.id === session)?.role === "trainer" ? "trainer-home" : "profile"; render(); }
+  try { const remoteData = await window.remoteStore.signIn(email, password); data = remoteData; session = remoteData.sessionId; localStorage.setItem(SESSION_KEY, session); currentView = defaultViewFor(currentUser()); syncRouteToUrl(true); render(); }
   catch (error) {
     const localUser = findLocalLoginUser(email, password);
     if (localUser) {
       remoteMode = false;
       session = localUser.id;
       localStorage.setItem(SESSION_KEY, session);
-      currentView = localUser.role === "admin" ? "overview" : "profile";
+      currentView = defaultViewFor(localUser);
+      syncRouteToUrl(true);
       render();
       toast("Helyi demo fiókkal jelentkeztél be.");
       return;
@@ -198,7 +418,17 @@ function renderAuth() {
 function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
-  return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">FORM <span>&</span> FUNCTION</div>${isAdmin ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button>` : isTrainer ? `<div class="nav-label">Edzői tér</div><button class="nav-btn active" data-view="trainer-home">Saját kliensek</button>` : `<div class="nav-label">Saját tér</div><button class="nav-btn active" data-view="profile">Profilom</button>`}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderConnectionCenter(user)}${isAdmin ? renderAdminContent() : isTrainer ? (currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)) : renderClientContent(user)}</section></main>`;
+  const navigation = isAdmin
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button>`
+    : isTrainer
+      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "trainer-home" ? "active" : ""}" data-view="trainer-home">Saját kliensek</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button>`
+      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "profile" ? "active" : ""}" data-view="profile">Profilom</button><button class="nav-btn ${currentView === "coach-directory" ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button>`;
+  const workspace = isAdmin
+    ? renderAdminContent()
+    : isTrainer
+      ? currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)
+      : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : renderClientContent(user);
+  return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">FORM <span>&</span> FUNCTION</div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderConnectionCenter(user)}${workspace}</section></main>`;
 }
 
 function renderTrainerContent(trainer) {
@@ -209,6 +439,8 @@ function renderTrainerContent(trainer) {
 function renderAdminContent() {
   if (currentView === "clients") return renderClients();
   if (currentView === "trainers") return renderTrainers();
+  if (currentView === "coach-profiles") return renderAdminCoachProfiles();
+  if (currentView === "coach-profile-review") return renderCoachProfileDetail();
   if (currentView === "client-detail") return renderEnhancedClientDetail(selectedClient());
   const clients = data.users.filter((user) => user.role === "client");
   const openSessions = clients.reduce((total, client) => total + (client.workouts || []).filter((workout) => workout.status === "Beütemezve").length, 0);
@@ -305,7 +537,7 @@ function bindModalEvents() {
 
 async function deleteCurrentAccount() {
   if (!confirm("Biztosan törlöd a saját fiókodat? Ez a művelet nem vonható vissza.")) return;
-  try { if (remoteMode) await window.remoteStore.accountAdmin({ action: "delete-self" }); data.users = data.users.filter((user) => user.id !== currentUser()?.id); session = null; localStorage.removeItem(SESSION_KEY); render(); toast("A fiókod törölve."); }
+  try { if (remoteMode) await window.remoteStore.accountAdmin({ action: "delete-self" }); data.users = data.users.filter((user) => user.id !== currentUser()?.id); session = null; localStorage.removeItem(SESSION_KEY); syncRouteToUrl(true); render(); toast("A fiókod törölve."); }
   catch (error) { toast(`Nem sikerült törölni: ${error.message}`); }
 }
 
@@ -318,7 +550,7 @@ async function deleteTrainer(trainerId) {
 function bindEvents() {
   if (remoteMode) document.querySelector("#login-form")?.addEventListener("submit", remoteLogin, { capture: true });
   if (currentUser()?.role === "admin" && !document.querySelector("[data-view='trainers']")) {
-    const button = document.createElement("button"); button.className = "nav-btn"; button.dataset.view = "trainers"; button.textContent = "Edzők"; document.querySelector(".sidebar .nav-label")?.after(button); button.addEventListener("click", () => { currentView = "trainers"; render(); });
+    const button = document.createElement("button"); button.className = "nav-btn"; button.dataset.view = "trainers"; button.textContent = "Edzők"; document.querySelector(".sidebar .nav-label")?.after(button); button.addEventListener("click", () => navigateToView("trainers"));
   }
   const loginForm = document.querySelector("#login-form");
   if (loginForm && !document.querySelector("#forgot-password")) {
@@ -328,14 +560,16 @@ function bindEvents() {
   document.querySelector("#login-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); const email = document.querySelector("#email").value.trim().toLowerCase(); const password = document.querySelector("#password").value;
     const user = findLocalLoginUser(email, password);
-    if (!user) return toast("Az e-mail-cím vagy a jelszó hibás."); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = user.role === "admin" ? "overview" : "profile"; render();
+    if (!user) return toast("Az e-mail-cím vagy a jelszó hibás."); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = defaultViewFor(user); syncRouteToUrl(true); render();
   });
   document.querySelector("#show-register")?.addEventListener("click", () => openRegistrationV2());
-  document.querySelector("#logout")?.addEventListener("click", async () => { if (remoteMode) await window.remoteStore.signOut(); session = null; localStorage.removeItem(SESSION_KEY); render(); });
+  document.querySelector("#logout")?.addEventListener("click", async () => { if (remoteMode) await window.remoteStore.signOut(); session = null; localStorage.removeItem(SESSION_KEY); syncRouteToUrl(true); render(); });
   if (["trainer", "client"].includes(currentUser()?.role)) {
     if (!document.querySelector("#delete-account")) { const button = document.createElement("button"); button.id = "delete-account"; button.className = "nav-btn btn-danger"; button.textContent = "Fiók törlése"; document.querySelector(".sidebar")?.append(button); button.addEventListener("click", deleteCurrentAccount); }
   }
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => { currentView = button.dataset.view; render(); }));
+  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => navigateToView(button.dataset.view)));
+  document.querySelectorAll("[data-coach-profile]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-detail", { coachId: button.dataset.coachProfile })));
+  document.querySelectorAll("[data-coach-review]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-review", { coachId: button.dataset.coachReview })));
   document.querySelector("#connection-request-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const email = document.querySelector("#connection-email").value.trim().toLowerCase();
@@ -370,6 +604,104 @@ function bindEvents() {
       toast(`Nem sikerült frissíteni a kérést: ${error.message}`);
     }
   }));
+  document.querySelectorAll("[data-coach-request]").forEach((button) => button.addEventListener("click", async () => {
+    const coachId = button.dataset.coachRequest;
+    try {
+      if (remoteMode) {
+        await window.remoteStore.createCoachConnectionRequest(coachId);
+        await refreshRemote();
+      } else {
+        createLocalCoachRequest(currentUser(), coachId);
+        saveData();
+        render();
+      }
+      toast("A kapcsolódási kérés elküldve.");
+    } catch (error) {
+      toast(`Nem sikerült elküldeni a kérést: ${error.message}`);
+    }
+  }));
+  document.querySelector("#coach-profile-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const user = currentUser();
+    const values = Object.fromEntries(new FormData(event.currentTarget).entries());
+    const files = Array.from(document.querySelector("#coach-photos").files || []);
+    const profile = coachProfileFor(user.id) || { id: user.id, name: user.name, photos: [] };
+    const existingPhotos = profile.photos || [];
+    if (existingPhotos.length + files.length > 5) {
+      toast("Legfeljebb 5 képet adhatsz meg összesen.");
+      return;
+    }
+    if (files.some((file) => !["image/jpeg", "image/png", "image/webp"].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+      toast("Csak JPG, PNG vagy WebP kép tölthető fel, legfeljebb 5 MB méretben.");
+      return;
+    }
+    const uploadedPaths = [];
+    const locallyStoredPaths = [];
+    try {
+      let photos = [...existingPhotos];
+      if (remoteMode) {
+        for (const file of files) {
+          const path = await window.remoteStore.uploadCoachPhoto(file);
+          uploadedPaths.push(path);
+          photos.push({ path, url: "" });
+        }
+        await window.remoteStore.saveCoachProfile(values.specialty.trim(), values.bio.trim(), photos.map((photo) => photo.path));
+        await refreshRemote();
+      } else {
+        for (const file of files) {
+          const path = `local-photo-${crypto.randomUUID()}`;
+          await localPhotoRequest("readwrite", (store) => store.put(file, path));
+          locallyStoredPaths.push(path);
+          photos.push({ path, url: URL.createObjectURL(file) });
+        }
+        const updatedProfile = { id: user.id, name: user.name, specialty: values.specialty.trim(), bio: values.bio.trim(), photos };
+        const index = data.coachProfiles.findIndex((item) => item.id === user.id);
+        if (index < 0) data.coachProfiles.push(updatedProfile);
+        else data.coachProfiles[index] = updatedProfile;
+        user.specialty = updatedProfile.specialty;
+        saveData();
+        render();
+      }
+      toast("A bemutatkozásod mentve.");
+    } catch (error) {
+      let cleanupMessage = "";
+      if (remoteMode && uploadedPaths.length) {
+        try { await window.remoteStore.deleteCoachPhotos(uploadedPaths); }
+        catch (cleanupError) { cleanupMessage = ` Néhány feltöltött kép ideiglenesen megmaradhatott: ${cleanupError.message}`; }
+      } else if (locallyStoredPaths.length) {
+        try {
+          for (const path of locallyStoredPaths) await localPhotoRequest("readwrite", (store) => store.delete(path));
+        } catch (cleanupError) {
+          cleanupMessage = ` Néhány feltöltött kép ideiglenesen megmaradhatott: ${cleanupError.message}`;
+        }
+      }
+      toast(`Nem sikerült menteni a bemutatkozást: ${error.message}${cleanupMessage}`);
+    }
+  });
+  document.querySelectorAll("[data-remove-coach-photo]").forEach((button) => button.addEventListener("click", async () => {
+    const user = currentUser();
+    const profile = coachProfileFor(user.id);
+    const path = button.dataset.removeCoachPhoto;
+    if (!profile) return;
+    const remaining = profile.photos.filter((photo) => photo.path !== path);
+    try {
+      if (remoteMode) {
+        await window.remoteStore.saveCoachProfile(profile.specialty, profile.bio, remaining.map((photo) => photo.path));
+        await window.remoteStore.deleteCoachPhotos([path]);
+        await refreshRemote();
+      } else {
+        const removedPhoto = profile.photos.find((photo) => photo.path === path);
+        await localPhotoRequest("readwrite", (store) => store.delete(path));
+        if (removedPhoto?.url) URL.revokeObjectURL(removedPhoto.url);
+        profile.photos = remaining;
+        saveData();
+        render();
+      }
+      toast("A kép törölve.");
+    } catch (error) {
+      toast(`Nem sikerült törölni a képet: ${error.message}`);
+    }
+  }));
   document.querySelector("#mark-notifications-read")?.addEventListener("click", async () => {
     try {
       if (remoteMode) {
@@ -385,7 +717,7 @@ function bindEvents() {
     }
   });
   document.querySelector("#add-client")?.addEventListener("click", () => { if (remoteMode) toast("Új klienst a regisztrációs oldalon lehet létrehozni."); else openModal(); });
-  document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); }));
+  document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => navigateToView("client-detail", { clientId: button.dataset.clientId })));
   document.querySelector("#edit-client")?.addEventListener("click", () => openModal(selectedClient()));
   document.querySelector("#add-workout")?.addEventListener("click", () => openModal(renderWorkoutModalForUser(currentUser().role === "client" ? currentUser() : selectedClient())));
   if (currentUser()?.role !== "admin") document.querySelector("#manage-trainers")?.remove();
@@ -394,10 +726,10 @@ function bindEvents() {
   document.querySelector("#edit-profile")?.addEventListener("click", () => openModal(currentUser()));
   document.querySelector("#add-trainer")?.addEventListener("click", () => openModal(renderTrainerModal()));
   document.querySelectorAll(".btn-delete-trainer").forEach((button) => button.addEventListener("click", () => deleteTrainer(button.dataset.trainerId)));
-  if (currentUser()?.role === "client" && !document.querySelector("#add-workout")) {
+  if (currentUser()?.role === "client" && currentView === "profile" && !document.querySelector("#add-workout")) {
     const action = document.createElement("button"); action.className = "btn btn-ghost"; action.id = "add-workout"; action.textContent = "+ Egyéni edzés"; document.querySelector(".topbar")?.append(action);
   }
-  document.querySelector("#client-search")?.addEventListener("input", (event) => { const needle = event.target.value.toLowerCase(); const filtered = data.users.filter((user) => user.role === "client" && `${user.name} ${user.email}`.toLowerCase().includes(needle)); document.querySelector("#client-table").innerHTML = renderClientTable(filtered); document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => { selectedClientId = button.dataset.clientId; currentView = "client-detail"; render(); })); });
+  document.querySelector("#client-search")?.addEventListener("input", (event) => { const needle = event.target.value.toLowerCase(); const filtered = data.users.filter((user) => user.role === "client" && `${user.name} ${user.email}`.toLowerCase().includes(needle)); document.querySelector("#client-table").innerHTML = renderClientTable(filtered); document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => navigateToView("client-detail", { clientId: button.dataset.clientId }))); });
 }
 
 function openForgotPassword() {
@@ -423,7 +755,11 @@ function renderClientContent(user) {
   return `<div class="topbar"><div><div class="eyebrow">Saját tér</div><h1>Szia, ${escapeHtml(user.name.split(" ")[0])}.</h1><p>A következetesség a munka. Folytasd.</p></div><button class="btn btn-ghost" id="edit-profile">Profil szerkesztése</button></div><div class="detail-layout"><section class="panel profile-card"><div class="profile-avatar">${initials(user.name)}</div><h2>${escapeHtml(user.name)}</h2><p>${escapeHtml(user.email)}</p><span class="status status-${user.status === "Aktív" ? "active" : "paused"}">${escapeHtml(user.status || "Aktív")}</span><div class="profile-meta"><div class="meta-row"><span>Fókusz</span><strong>${escapeHtml(user.goal || "Nincs beállítva")}</strong></div><div class="meta-row"><span>Edzők</span><strong>${(user.trainerIds || []).map((id) => escapeHtml(trainerName(id))).join(", ") || "Nincs hozzárendelve"}</strong></div><div class="meta-row"><span>Következő edzés</span><strong>${escapeHtml(user.nextSession || "Nincs beütemezve")}</strong></div></div></section><section class="panel"><div class="panel-head"><h2>Fejlődésed</h2><span class="eyebrow" style="margin:0">Ez a hónap</span></div><div class="metric-grid"><div class="metric"><strong>${user.sessions || 0}</strong><span>Teljesített edzés</span></div><div class="metric"><strong>${user.adherence || 0}%</strong><span>Terv teljesítése</span></div><div class="metric"><strong>+12%</strong><span>Erő trend</span></div></div><h3>Terv teljesítése</h3><div class="progress-bar"><span style="width:${user.adherence || 0}%"></span></div><p style="color:var(--muted);font-size:.79rem">${user.adherence >= 80 ? "Nagyszerű lendületet építesz." : "Folyamatosan haladsz előre."} Minden edzés számít.</p><div class="panel-head" style="margin-top:28px"><h2>Edzésnapló</h2></div>${workouts.length ? workouts.map((workout) => `<div class="session-row"><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(trainerName(workout.trainerId))}</p></div><span class="status status-${workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(workout.status)}</span></div>`).join("") : `<div class="empty-state">Még nincs rögzített edzés.</div>`}<div class="panel" style="background:var(--mint);border:0;margin-top:20px"><h3>Edzői megjegyzés</h3><p style="font-size:.84rem;line-height:1.55;margin-bottom:0">${escapeHtml(user.notes || "Tartsd a fókuszt és figyelj a mozgásminőségre.")}</p></div></section></div>`;
 }
 
+restoreRouteFromUrl();
 render();
+window.remoteStore?.onPasswordRecovery?.(() => {
+  if (!document.querySelector("#reset-form")) renderPasswordReset();
+});
 initializeRemote();
 
 function openRegistrationV2() {
@@ -432,5 +768,5 @@ function openRegistrationV2() {
   roleSelect.addEventListener("change", () => { const trainer = roleSelect.value === "trainer"; document.querySelector("#reg-goal-field").style.display = trainer ? "none" : "block"; document.querySelector("#reg-goal").required = !trainer; document.querySelector("#reg-specialty-field").style.display = trainer ? "block" : "none"; });
   document.querySelectorAll("#back-login, #back-login-2").forEach((button) => button.addEventListener("click", render));
   if (remoteMode) document.querySelector("#register-form")?.addEventListener("submit", remoteRegister, { capture: true });
-  document.querySelector("#register-form").addEventListener("submit", (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); if (data.users.some((user) => user.email.toLowerCase() === values.email.toLowerCase())) return toast("Ezzel az e-mail-címmel már létezik fiók."); const isTrainer = values.role === "trainer"; const user = { ...values, id: `${values.role}-${Date.now()}`, status: "Aktív", joined: formatDate(), sessions: 0, adherence: 0, trainerIds: [], workouts: [], ...(isTrainer ? { specialty: values.specialty || "Általános edzés" } : { nextSession: "Nincs beütemezve", notes: "Új kliens - bevezető edzés beütemezése szükséges." }) }; data.users.push(user); data.activities.unshift({ text: `${user.name} új ${isTrainer ? "edzőként" : "kliensként"} regisztrált`, time: "Most", mark: initials(user.name) }); saveData(); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = isTrainer ? "trainer-home" : "profile"; render(); toast(isTrainer ? "Edzői fiók létrehozva" : "Kliensfiók létrehozva"); });
+  document.querySelector("#register-form").addEventListener("submit", (event) => { event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); if (data.users.some((user) => user.email.toLowerCase() === values.email.toLowerCase())) return toast("Ezzel az e-mail-címmel már létezik fiók."); const isTrainer = values.role === "trainer"; const user = { ...values, id: `${values.role}-${Date.now()}`, status: "Aktív", joined: formatDate(), sessions: 0, adherence: 0, trainerIds: [], workouts: [], ...(isTrainer ? { specialty: values.specialty || "Általános edzés" } : { nextSession: "Nincs beütemezve", notes: "Új kliens - bevezető edzés beütemezése szükséges." }) }; data.users.push(user); data.activities.unshift({ text: `${user.name} új ${isTrainer ? "edzőként" : "kliensként"} regisztrált`, time: "Most", mark: initials(user.name) }); saveData(); session = user.id; localStorage.setItem(SESSION_KEY, session); currentView = isTrainer ? "trainer-home" : "profile"; syncRouteToUrl(true); render(); toast(isTrainer ? "Edzői fiók létrehozva" : "Kliensfiók létrehozva"); });
 }

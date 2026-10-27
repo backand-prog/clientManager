@@ -188,7 +188,110 @@ using (user_id = auth.uid());
 
 grant select on public.connection_requests, public.connection_notifications to authenticated;
 
-create or replace function public.create_connection_request(target_email text)
+create table if not exists public.coach_public_profiles (
+  id uuid primary key references public.profiles(id) on delete cascade,
+  display_name text not null,
+  specialty text not null,
+  bio text not null check (char_length(bio) <= 2000),
+  photo_paths text[] not null default '{}',
+  updated_at timestamptz not null default now(),
+  check (cardinality(photo_paths) <= 5)
+);
+
+alter table public.coach_public_profiles enable row level security;
+
+drop policy if exists coach_public_profiles_authenticated_read on public.coach_public_profiles;
+create policy coach_public_profiles_authenticated_read on public.coach_public_profiles
+for select to authenticated
+using (public.current_role() in ('client', 'trainer', 'admin'));
+
+grant select on public.coach_public_profiles to authenticated;
+
+create or replace function public.save_coach_profile(profile_specialty text, profile_bio text, profile_photo_paths text[])
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  coach_profile public.profiles%rowtype;
+  safe_photo_paths text[] := coalesce(profile_photo_paths, '{}');
+begin
+  if auth.uid() is null then
+    raise exception 'Bejelentkezés szükséges.';
+  end if;
+
+  select * into coach_profile
+  from public.profiles
+  where id = auth.uid();
+  if coach_profile.role <> 'trainer' then
+    raise exception 'Csak edző szerkesztheti az edzői bemutatkozást.';
+  end if;
+  if length(trim(coalesce(profile_specialty, ''))) = 0 or length(profile_specialty) > 120 then
+    raise exception 'Adj meg egy legfeljebb 120 karakteres szakterületet.';
+  end if;
+  if length(trim(coalesce(profile_bio, ''))) = 0 or length(profile_bio) > 2000 then
+    raise exception 'A bemutatkozás legyen 1 és 2000 karakter között.';
+  end if;
+  if cardinality(safe_photo_paths) > 5 then
+    raise exception 'Legfeljebb 5 kép tölthető fel.';
+  end if;
+  if exists (
+    select 1 from unnest(safe_photo_paths) as photo_path
+    where split_part(photo_path, '/', 1) <> auth.uid()::text
+  ) then
+    raise exception 'Csak a saját képeid használhatók.';
+  end if;
+
+  update public.profiles
+  set specialty = trim(profile_specialty)
+  where id = auth.uid();
+
+  insert into public.coach_public_profiles (id, display_name, specialty, bio, photo_paths, updated_at)
+  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), safe_photo_paths, now())
+  on conflict (id) do update
+  set display_name = excluded.display_name,
+      specialty = excluded.specialty,
+      bio = excluded.bio,
+      photo_paths = excluded.photo_paths,
+      updated_at = excluded.updated_at;
+end;
+$$;
+
+revoke all on function public.save_coach_profile(text, text, text[]) from public;
+grant execute on function public.save_coach_profile(text, text, text[]) to authenticated;
+
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('coach-profile-images', 'coach-profile-images', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
+on conflict (id) do update
+set public = false,
+    file_size_limit = 5242880,
+    allowed_mime_types = array['image/jpeg', 'image/png', 'image/webp'];
+
+drop policy if exists coach_profile_images_authenticated_read on storage.objects;
+create policy coach_profile_images_authenticated_read on storage.objects
+for select to authenticated
+using (bucket_id = 'coach-profile-images');
+
+drop policy if exists coach_profile_images_owner_insert on storage.objects;
+create policy coach_profile_images_owner_insert on storage.objects
+for insert to authenticated
+with check (
+  bucket_id = 'coach-profile-images'
+  and public.current_role() = 'trainer'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+drop policy if exists coach_profile_images_owner_delete on storage.objects;
+create policy coach_profile_images_owner_delete on storage.objects
+for delete to authenticated
+using (
+  bucket_id = 'coach-profile-images'
+  and public.current_role() = 'trainer'
+  and (storage.foldername(name))[1] = auth.uid()::text
+);
+
+create or replace function public.create_connection_request_by_id(target_user_id uuid)
 returns uuid
 language plpgsql
 security definer
@@ -216,7 +319,7 @@ begin
   select p.* into target_profile
   from auth.users u
   join public.profiles p on p.id = u.id
-  where lower(u.email) = lower(trim(target_email))
+  where p.id = target_user_id
     and p.role in ('trainer', 'client');
 
   if not found then
@@ -262,6 +365,27 @@ begin
     (actor_profile.id, new_request_id, 'request_sent', 'A kapcsolódási kérésed elküldve ' || target_profile.full_name || ' részére.');
 
   return new_request_id;
+end;
+$$;
+
+create or replace function public.create_connection_request(target_email text)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  target_user_id uuid;
+begin
+  select p.id into target_user_id
+  from auth.users u
+  join public.profiles p on p.id = u.id
+  where lower(u.email) = lower(trim(target_email))
+    and p.role in ('trainer', 'client');
+  if target_user_id is null then
+    raise exception 'Nem található ilyen e-mail-című regisztrált edző vagy kliens.';
+  end if;
+  return public.create_connection_request_by_id(target_user_id);
 end;
 $$;
 
@@ -337,8 +461,10 @@ as $$
 $$;
 
 revoke all on function public.create_connection_request(text) from public;
+revoke all on function public.create_connection_request_by_id(uuid) from public;
 revoke all on function public.respond_connection_request(uuid, text) from public;
 revoke all on function public.mark_connection_notifications_read() from public;
 grant execute on function public.create_connection_request(text) to authenticated;
+grant execute on function public.create_connection_request_by_id(uuid) to authenticated;
 grant execute on function public.respond_connection_request(uuid, text) to authenticated;
 grant execute on function public.mark_connection_notifications_read() to authenticated;

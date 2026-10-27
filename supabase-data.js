@@ -19,23 +19,39 @@
   async function load() {
     if (!enabled) return null;
     const { data: authData, error } = await client.auth.getUser();
+    if (error?.name === "AuthSessionMissingError") return null;
     if (error) throw error;
     const user = authData?.user;
     if (!user) return null;
-    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult] = await Promise.all([
       client.from("profiles").select("*").order("created_at"),
       client.from("client_trainers").select("client_id, trainer_id"),
       client.from("workouts").select("*").order("workout_date", { ascending: false }),
       client.from("connection_requests").select("*").order("created_at", { ascending: false }),
-      client.from("connection_notifications").select("*").order("created_at", { ascending: false }).limit(30)
+      client.from("connection_notifications").select("*").order("created_at", { ascending: false }).limit(30),
+      client.from("coach_public_profiles").select("*").order("updated_at", { ascending: false })
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
     if (workoutsResult.error) throw workoutsResult.error;
     if (requestsResult.error) throw requestsResult.error;
     if (notificationsResult.error) throw notificationsResult.error;
+    if (coachProfilesResult.error) throw coachProfilesResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
+    const coachProfiles = await Promise.all((coachProfilesResult.data || []).map(async (profile) => {
+      const signedResult = profile.photo_paths.length
+        ? await client.storage.from("coach-profile-images").createSignedUrls(profile.photo_paths, 3600)
+        : { data: [], error: null };
+      if (signedResult.error) throw signedResult.error;
+      return {
+        id: profile.id,
+        name: profile.display_name,
+        specialty: profile.specialty || "",
+        bio: profile.bio || "",
+        photos: (signedResult.data || []).map((photo) => ({ path: photo.path, url: photo.signedUrl }))
+      };
+    }));
     return {
       sessionId: user.id,
       users: (profilesResult.data || []).map((profile) => {
@@ -74,7 +90,8 @@
         message: notification.message,
         createdAt: notification.created_at,
         readAt: notification.read_at
-      }))
+      })),
+      coachProfiles
     };
   }
 
@@ -90,7 +107,7 @@
     const result = await client.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { emailRedirectTo: window.location.href, data: { full_name: values.name, role: values.role, specialty: values.specialty || null, goal: values.goal || null } }
+      options: { emailRedirectTo: window.location.origin, data: { full_name: values.name, role: values.role, specialty: values.specialty || null, goal: values.goal || null } }
     });
     if (result.error) throw result.error;
     return result.data.user;
@@ -137,6 +154,38 @@
     if (result.error) throw result.error;
   }
 
+  async function createCoachConnectionRequest(coachId) {
+    if (!enabled) return;
+    const result = await client.rpc("create_connection_request_by_id", { target_user_id: coachId });
+    if (result.error) throw result.error;
+  }
+
+  async function saveCoachProfile(specialty, bio, photoPaths) {
+    if (!enabled) return;
+    const result = await client.rpc("save_coach_profile", { profile_specialty: specialty, profile_bio: bio, profile_photo_paths: photoPaths });
+    if (result.error) throw result.error;
+  }
+
+  async function uploadCoachPhoto(file) {
+    if (!enabled) return null;
+    const extension = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" }[file.type];
+    if (!extension || file.size > 5 * 1024 * 1024) throw new Error("Válassz JPG, PNG vagy WebP képet legfeljebb 5 MB méretben.");
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    if (!authData.user) throw new Error("Bejelentkezés szükséges a képfeltöltéshez.");
+    const path = `${authData.user.id}/${crypto.randomUUID()}.${extension}`;
+    const result = await client.storage.from("coach-profile-images").upload(path, file, { contentType: file.type, upsert: false });
+    if (result.error) throw result.error;
+    return path;
+  }
+
+  async function deleteCoachPhotos(paths) {
+    if (!enabled) return;
+    if (!paths.length) return;
+    const result = await client.storage.from("coach-profile-images").remove(paths);
+    if (result.error) throw result.error;
+  }
+
   async function signOut() {
     if (enabled) await client.auth.signOut();
   }
@@ -151,8 +200,15 @@
 
   async function requestPasswordReset(email) {
     if (!enabled) return null;
-    const result = await client.auth.resetPasswordForEmail(email, { redirectTo: window.location.href });
+    const result = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/?password-reset=1` });
     if (result.error) throw result.error;
+  }
+
+  function onPasswordRecovery(callback) {
+    if (!enabled) return;
+    client.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") callback();
+    });
   }
 
   async function updatePassword(password) {
@@ -161,5 +217,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, createConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, signOut, accountAdmin, requestPasswordReset, updatePassword };
+  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

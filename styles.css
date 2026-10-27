@@ -124,6 +124,25 @@ tbody tr:last-child td { border-bottom: 0; }
 .notification-unread { background: #f1faf7; }
 .connection-center .text-button:disabled { color: var(--muted); cursor: default; }
 .connection-center .search-row input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; }
+.coach-profile-editor { max-width: 850px; }
+.coach-profile-editor .field small { display: block; color: var(--muted); font-size: .75rem; margin-top: 6px; }
+.coach-profile-editor input[type="file"] { padding: 10px; }
+.coach-directory { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+.coach-card { min-width: 0; }
+.coach-card-heading { display: flex; align-items: center; gap: 12px; }
+.coach-card-heading h2 { font-size: 1.05rem; }
+.coach-card-heading p { margin: 4px 0 0; color: var(--muted); font-size: .82rem; }
+.coach-card > .btn { width: 100%; margin-top: 10px; }
+.coach-profile-detail { max-width: 900px; }
+.coach-profile-detail .coach-card-heading { margin-bottom: 24px; }
+.coach-profile-detail .coach-card-heading h1 { margin: 4px 0; }
+.coach-profile-detail > h2 { margin: 24px 0 8px; }
+.coach-bio { color: var(--ink); font-size: .88rem; line-height: 1.6; white-space: pre-wrap; }
+.coach-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 14px 0; }
+.coach-gallery img { display: block; width: 100%; height: auto; border-radius: 7px; object-fit: contain; background: var(--mint); }
+.coach-profile-gallery { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.coach-gallery-item { min-width: 0; }
+.coach-gallery-item .btn { width: 100%; margin-top: 6px; padding: 8px; font-size: .75rem; }
 .empty-state { text-align: center; color: var(--muted); padding: 28px 10px; font-size: .88rem; }
 .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8,29,45,.55); z-index: 5; }
 .modal { width: min(510px, 100%); max-height: 90vh; overflow-y: auto; background: var(--white); border-radius: 9px; padding: 25px; }
