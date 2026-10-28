@@ -1,4 +1,4 @@
-# Form & Function klienskezelő
+# RutinNapló klienskezelő
 
 Első verziós klienskezelő személyi edzők számára.
 
@@ -11,9 +11,12 @@ Első verziós klienskezelő személyi edzők számára.
 - Kliensprofilok hozzáadása és szerkesztése
 - Kliensenkénti edzéslista az adminisztrátor számára
 - Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal, státusszal és edzővel
+- A következő edzés automatikusan a legkorábbi jövőbeli, beütemezett alkalomból jelenik meg
 - Havi edzésnaptár napválasztással; az adminisztrátorok és edzők a kliensekhez ütemezhetnek, a kliensek a saját edzéseiket tekinthetik át
 - Egyéni, edző nélküli edzések naplózása
 - Kliensregisztráció és saját profil-/fejlődésnézet
+- Kezdőlap szerepkörhöz igazított áttekintéssel, külön kliens- és edzői beállításokkal
+- Külön kapcsolati és értesítési oldalak, olvasatlan értesítések előnézetével
 - Szerkeszthető edzői bemutatkozás szakterülettel és legfeljebb 5 képpel
 - Bejelentkezett kliensek megnyithatják az edzői profilokat, megtekinthetik a bemutatkozást és a képeket, majd kapcsolódási kérést küldhetnek
 - Az adminisztrátor külön menüpontban áttekintheti az edzők közzétett profiljait és képeit

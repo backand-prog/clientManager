@@ -119,6 +119,12 @@
     if (result.error) throw result.error;
   }
 
+  async function updateEmail(email) {
+    if (!enabled) return;
+    const result = await client.auth.updateUser({ email });
+    if (result.error) throw result.error;
+  }
+
   async function updateAssignments(clientId, trainerIds) {
     if (!enabled) return;
     const remove = await client.from("client_trainers").delete().eq("client_id", clientId);
@@ -217,5 +223,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

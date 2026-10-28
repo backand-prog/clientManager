@@ -1,4 +1,4 @@
--- Form & Function PostgreSQL schema for Supabase
+-- RutinNapló PostgreSQL schema for Supabase
 -- Run this once in Supabase SQL Editor.
 
 create extension if not exists pgcrypto;

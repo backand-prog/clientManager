@@ -51,7 +51,7 @@ button { cursor: pointer; }
 .demo-box strong { color: var(--navy); }
 
 .dashboard { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
-.sidebar { background: var(--navy); color: var(--white); padding: 28px 20px; display: flex; flex-direction: column; }
+.sidebar { background: var(--navy); color: var(--white); padding: 28px 20px; display: flex; flex-direction: column; overflow-y: auto; }
 .sidebar .brand { padding: 0 12px 44px; }
 .nav-label { color: #72909d; text-transform: uppercase; letter-spacing: .1em; font-size: .67rem; font-weight: 700; padding: 0 12px 10px; }
 .nav-btn { width: 100%; text-align: left; border: 0; color: #b8d0d7; background: transparent; padding: 12px; border-radius: 6px; margin-bottom: 3px; font-weight: 600; }
@@ -92,6 +92,17 @@ tbody tr:last-child td { border-bottom: 0; }
 .activity-mark { color: var(--white); background: var(--blue); width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: .65rem; font-weight: 800; flex: 0 0 auto; }
 .activity p { margin: 0; font-size: .8rem; line-height: 1.45; }
 .activity small { display: block; color: var(--muted); margin-top: 3px; }
+.notification-preview { margin-bottom: 20px; }
+.notification-preview .panel-head { margin-bottom: 8px; }
+.notification-preview .panel-head p, .notification-list .activity small { color: var(--muted); font-size: .78rem; margin: 4px 0 0; }
+.notification-list .activity { padding: 16px 0; }
+.settings-panel { max-width: 720px; }
+.settings-panel > h2 { margin-bottom: 8px; }
+.settings-help { color: var(--muted); font-size: .82rem; line-height: 1.5; }
+.settings-actions { display: flex; justify-content: flex-end; }
+.settings-danger { margin-top: 34px; padding-top: 24px; border-top: 1px solid var(--line); }
+.settings-danger h2 { color: #a83c2b; }
+.settings-danger p { color: var(--muted); font-size: .83rem; line-height: 1.5; }
 .search-row { display: flex; gap: 10px; margin-bottom: 18px; }
 .search-row input { flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; }
 .detail-layout { display: grid; grid-template-columns: 280px 1fr; gap: 18px; }
