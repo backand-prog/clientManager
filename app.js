@@ -24,6 +24,8 @@ let session = localStorage.getItem(SESSION_KEY);
 let currentView = "overview";
 let selectedClientId = null;
 let selectedCoachId = null;
+let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+let calendarSelectedDate = toDateInputValue(new Date());
 let remoteMode = Boolean(window.remoteStore?.enabled);
 let localPhotoDbPromise;
 
@@ -35,6 +37,7 @@ function routeForCurrentState() {
   const user = currentUser();
   if (!user) return "/";
   if (user.role === "admin") {
+    if (currentView === "calendar") return "/admin/calendar";
     if (currentView === "clients") return "/admin/clients";
     if (currentView === "trainers") return "/admin/trainers";
     if (currentView === "coach-profiles") return "/admin/coach-profiles";
@@ -43,10 +46,12 @@ function routeForCurrentState() {
     return "/admin";
   }
   if (user.role === "trainer") {
+    if (currentView === "calendar") return "/coach/calendar";
     if (currentView === "coach-profile") return "/coach/profile";
     if (currentView === "client-detail") return `/coach/clients/${encodeURIComponent(selectedClientId || "")}`;
     return "/coach/clients";
   }
+  if (currentView === "calendar") return "/client/calendar";
   if (currentView === "coach-directory") return "/client/coaches";
   if (currentView === "coach-profile-detail") return `/client/coaches/${encodeURIComponent(selectedCoachId || "")}`;
   return "/client";
@@ -79,7 +84,8 @@ function restoreRouteFromUrl() {
   selectedCoachId = null;
 
   if (user.role === "admin") {
-    if (segments[0] === "admin" && segments[1] === "clients" && segments[2]) {
+    if (segments[0] === "admin" && segments[1] === "calendar") currentView = "calendar";
+    else if (segments[0] === "admin" && segments[1] === "clients" && segments[2]) {
       currentView = "client-detail";
       selectedClientId = segments[2];
     } else if (segments[0] === "admin" && segments[1] === "clients") currentView = "clients";
@@ -90,12 +96,14 @@ function restoreRouteFromUrl() {
     } else if (segments[0] === "admin" && segments[1] === "coach-profiles") currentView = "coach-profiles";
     else if (segments[0] === "admin") currentView = "overview";
   } else if (user.role === "trainer") {
-    if (segments[0] === "coach" && segments[1] === "profile") currentView = "coach-profile";
+    if (segments[0] === "coach" && segments[1] === "calendar") currentView = "calendar";
+    else if (segments[0] === "coach" && segments[1] === "profile") currentView = "coach-profile";
     else if (segments[0] === "coach" && segments[1] === "clients" && segments[2]) {
       currentView = "client-detail";
       selectedClientId = segments[2];
     } else if (segments[0] === "coach" && segments[1] === "clients") currentView = "trainer-home";
-  } else if (segments[0] === "client" && segments[1] === "coaches" && segments[2]) {
+  } else if (segments[0] === "client" && segments[1] === "calendar") currentView = "calendar";
+  else if (segments[0] === "client" && segments[1] === "coaches" && segments[2]) {
     currentView = "coach-profile-detail";
     selectedCoachId = segments[2];
   } else if (segments[0] === "client" && segments[1] === "coaches") currentView = "coach-directory";
@@ -178,6 +186,27 @@ function initials(name) { return name.split(" ").map((part) => part[0]).join("")
 function escapeHtml(value = "") { return String(value).replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])); }
 function toast(message) { const region = document.querySelector("#toast-region"); region.innerHTML = `<div class="toast">${escapeHtml(message)}</div>`; setTimeout(() => { region.innerHTML = ""; }, 3000); }
 function formatDate() { return new Intl.DateTimeFormat("hu-HU", { year: "numeric", month: "short", day: "numeric" }).format(new Date()); }
+function toDateInputValue(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+function workoutDateToInputValue(value) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return value;
+  const match = String(value || "").match(/^(\d{4})\.\s*([^.]+)\.\s*(\d{1,2})\.$/);
+  if (!match) return "";
+  const months = ["jan", "febr", "márc", "ápr", "máj", "jún", "júl", "aug", "szept", "okt", "nov", "dec"];
+  const month = months.indexOf(match[2].trim().replace(/\.$/, ""));
+  if (month < 0) return "";
+  return `${match[1]}-${String(month + 1).padStart(2, "0")}-${String(match[3]).padStart(2, "0")}`;
+}
+function dateFromInputValue(value) {
+  const match = String(value || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return date.getFullYear() === Number(match[1]) && date.getMonth() === Number(match[2]) - 1 && date.getDate() === Number(match[3]) ? date : null;
+}
 
 function addLocalNotification(userId, requestId, kind, message) {
   data.notifications.unshift({ id: `notification-${Date.now()}-${Math.random()}`, userId, requestId, kind, message, createdAt: new Date().toISOString(), readAt: null });
@@ -421,15 +450,15 @@ function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
   const navigation = isAdmin
-    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button>`
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "clients" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button>`
     : isTrainer
-      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "trainer-home" ? "active" : ""}" data-view="trainer-home">Saját kliensek</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button>`
-      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "profile" ? "active" : ""}" data-view="profile">Profilom</button><button class="nav-btn ${currentView === "coach-directory" ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button>`;
+      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "trainer-home" ? "active" : ""}" data-view="trainer-home">Saját kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button>`
+      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "profile" ? "active" : ""}" data-view="profile">Profilom</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-directory" ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button>`;
   const workspace = isAdmin
-    ? renderAdminContent()
+    ? currentView === "calendar" ? renderCalendar(user) : renderAdminContent()
     : isTrainer
-      ? currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)
-      : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : renderClientContent(user);
+      ? currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : renderTrainerContent(user)
+      : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : renderClientContent(user);
   return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">FORM <span>&</span> FUNCTION</div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderConnectionCenter(user)}${workspace}</section></main>`;
 }
 
@@ -447,6 +476,59 @@ function renderAdminContent() {
   const clients = data.users.filter((user) => user.role === "client");
   const openSessions = clients.reduce((total, client) => total + (client.workouts || []).filter((workout) => workout.status === "Beütemezve").length, 0);
   return `<div class="topbar"><div><div class="eyebrow">2026. március 24., kedd</div><h1>Jó reggelt, Andras.</h1><p>Így halad a coaching praxisod.</p></div><button class="btn btn-teal" id="add-client">${remoteMode ? "Kliens regisztrációja" : "+ Új kliens"}</button></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Összes kliens</div><div class="trend">+1 ebben a hónapban</div></div><div class="stat"><div class="number">${openSessions}</div><div class="label">Nyitott edzések</div><div class="trend">Beütemezve</div></div><div class="stat"><div class="number">84%</div><div class="label">Átlagos teljesítés</div><div class="trend">+6% az előző hónaphoz képest</div></div><div class="stat"><div class="number">6</div><div class="label">Olvasatlan frissítés</div><div class="trend">Átnézésre vár</div></div></div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Kliens áttekintő</h2><button class="text-button" data-view="clients">Összes megtekintése</button></div>${renderClientTable(clients.slice(0, 4))}</section><section class="panel"><div class="panel-head"><h2>Legutóbbi aktivitás</h2></div>${data.activities.slice(0, 4).map((item) => `<div class="activity"><div class="activity-mark">${item.mark}</div><p>${escapeHtml(item.text)}<small>${escapeHtml(item.time)}</small></p></div>`).join("")}</section></div>`;
+}
+
+function renderCalendar(user) {
+  const clients = calendarClientsFor(user);
+  const events = clients.flatMap((client) => (client.workouts || []).map((workout, index) => ({
+    client,
+    workout,
+    index,
+    date: workoutDateToInputValue(workout.date)
+  }))).filter((event) => event.date).sort((a, b) => a.date.localeCompare(b.date) || (a.workout.time || "").localeCompare(b.workout.time || ""));
+  const selectedDate = dateFromInputValue(calendarSelectedDate) ? calendarSelectedDate : toDateInputValue(new Date());
+  calendarSelectedDate = selectedDate;
+  const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
+  const leadingDays = (firstDay.getDay() + 6) % 7;
+  const gridStart = new Date(firstDay.getFullYear(), firstDay.getMonth(), 1 - leadingDays);
+  const gridDays = Math.ceil((leadingDays + new Date(firstDay.getFullYear(), firstDay.getMonth() + 1, 0).getDate()) / 7) * 7;
+  const monthLabel = new Intl.DateTimeFormat("hu-HU", { month: "long", year: "numeric" }).format(firstDay);
+  const monthTitle = monthLabel.charAt(0).toLocaleUpperCase("hu-HU") + monthLabel.slice(1);
+  const weekdays = ["Hétfő", "Kedd", "Szerda", "Csütörtök", "Péntek", "Szombat", "Vasárnap"];
+  const days = Array.from({ length: gridDays }, (_, index) => {
+    const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + index);
+    const dateValue = toDateInputValue(date);
+    const dayEvents = events.filter((event) => event.date === dateValue);
+    const outsideMonth = date.getMonth() !== calendarMonth.getMonth();
+    return `<article class="calendar-day ${outsideMonth ? "calendar-day-outside" : ""} ${dateValue === selectedDate ? "calendar-day-selected" : ""}"><button type="button" class="calendar-date" data-calendar-date="${dateValue}" aria-pressed="${dateValue === selectedDate}">${date.getDate()}</button><div class="calendar-events">${dayEvents.slice(0, 2).map((event) => user.role === "client"
+      ? `<span class="calendar-event" title="${escapeHtml(event.workout.type)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</span>`
+      : `<button type="button" class="calendar-event" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}" title="${escapeHtml(event.workout.type)} · ${escapeHtml(event.client.name)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</button>`).join("")}${dayEvents.length > 2 ? `<span class="calendar-more">+${dayEvents.length - 2} további</span>` : ""}</div></article>`;
+  }).join("");
+  const selectedEvents = events.filter((event) => event.date === selectedDate);
+  const selectedLabel = new Intl.DateTimeFormat("hu-HU", { dateStyle: "full" }).format(dateFromInputValue(selectedDate));
+  const selectedEventRows = selectedEvents.map((event) => `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`).join("");
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Naptár</div><h1>Edzésnaptár</h1><p>${user.role === "client" ? "A saját edzéseid áttekintése." : "A kliensek edzései és időpontjai egy helyen."}</p></div><button type="button" class="btn btn-teal" id="calendar-add-workout">${user.role === "client" ? "+ Egyéni edzés" : "+ Új edzés"}</button></div><section class="panel calendar-panel"><div class="calendar-toolbar"><button type="button" class="btn btn-ghost" id="calendar-previous" aria-label="Előző hónap">←</button><h2>${escapeHtml(monthTitle)}</h2><button type="button" class="btn btn-ghost" id="calendar-next" aria-label="Következő hónap">→</button><button type="button" class="text-button" id="calendar-today">Ma</button></div><div class="calendar-grid calendar-weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div><div class="calendar-grid">${days}</div></section><section class="panel calendar-agenda"><div class="panel-head"><div><h2>${escapeHtml(selectedLabel)}</h2><p>A kiválasztott nap edzései</p></div><span class="eyebrow" style="margin:0">${selectedEvents.length} edzés</span></div>${selectedEventRows || `<div class="empty-state">Erre a napra nincs edzés beütemezve.</div>`}</section>`;
+}
+
+function calendarClientsFor(user) {
+  if (user.role === "admin") return data.users.filter((item) => item.role === "client");
+  if (user.role === "trainer") return data.users.filter((item) => item.role === "client" && (item.trainerIds || []).includes(user.id));
+  return [user];
+}
+
+function openCalendarWorkout() {
+  const user = currentUser();
+  const date = dateFromInputValue(calendarSelectedDate) ? calendarSelectedDate : toDateInputValue(new Date());
+  if (user.role === "client") {
+    openModal(renderWorkoutModalForUser(user, { date, status: "Beütemezve" }));
+    return;
+  }
+  const clients = calendarClientsFor(user);
+  if (!clients.length) {
+    toast("Nincs olyan kliens, akihez edzést ütemezhetnél.");
+    return;
+  }
+  openModal(`<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Naptár / Új edzés</div><h2>Kliens kiválasztása</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="calendar-workout-client-form" data-date="${date}"><div class="field"><label for="calendar-workout-client">Kliens</label><select id="calendar-workout-client" name="clientId" required>${clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name)}</option>`).join("")}</select></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Tovább</button></div></form></div></div>`);
 }
 
 function renderTrainers() {
@@ -487,7 +569,7 @@ function renderModal(type, client = {}) {
 }
 
 function renderWorkoutModal(client, workout = {}, index = "") {
-  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${escapeHtml(client.name)} / Edzés</div><h2>${index === "" ? "Új edzés hozzáadása" : "Edzés szerkesztése"}</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="workout-form" data-index="${index}"><div class="form-grid"><div class="field"><label for="workout-date">Dátum</label><input id="workout-date" name="date" required type="date" value="${escapeHtml(workout.date || "")}" /></div><div class="field"><label for="workout-time">Időpont</label><input id="workout-time" name="time" required type="time" value="${escapeHtml(workout.time || "09:00")}" /></div><div class="field span-2"><label for="workout-type">Edzés típusa</label><input id="workout-type" name="type" required value="${escapeHtml(workout.type || "")}" placeholder="pl. Teljes testes erősítés" /></div><div class="field"><label for="workout-duration">Időtartam (perc)</label><input id="workout-duration" name="duration" required type="number" min="1" value="${workout.duration || 60}" /></div><div class="field"><label for="workout-status">Állapot</label><select id="workout-status" name="status"><option ${workout.status === "Beütemezve" ? "selected" : ""}>Beütemezve</option><option ${workout.status === "Teljesítve" ? "selected" : ""}>Teljesítve</option><option ${workout.status === "Lemondva" ? "selected" : ""}>Lemondva</option></select></div><div class="field span-2"><label for="workout-notes">Megjegyzés</label><textarea id="workout-notes" name="notes" placeholder="Rövid megjegyzés az edzésről">${escapeHtml(workout.notes || "")}</textarea></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edzés mentése</button></div></form></div></div>`;
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${escapeHtml(client.name)} / Edzés</div><h2>${index === "" ? "Új edzés hozzáadása" : "Edzés szerkesztése"}</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="workout-form" data-index="${index}" data-client-id="${escapeHtml(client.id)}"><div class="form-grid"><div class="field"><label for="workout-date">Dátum</label><input id="workout-date" name="date" required type="date" value="${escapeHtml(workoutDateToInputValue(workout.date))}" /></div><div class="field"><label for="workout-time">Időpont</label><input id="workout-time" name="time" required type="time" value="${escapeHtml(workout.time || "09:00")}" /></div><div class="field span-2"><label for="workout-type">Edzés típusa</label><input id="workout-type" name="type" required value="${escapeHtml(workout.type || "")}" placeholder="pl. Teljes testes erősítés" /></div><div class="field"><label for="workout-duration">Időtartam (perc)</label><input id="workout-duration" name="duration" required type="number" min="1" value="${workout.duration || 60}" /></div><div class="field"><label for="workout-status">Állapot</label><select id="workout-status" name="status"><option ${workout.status === "Beütemezve" ? "selected" : ""}>Beütemezve</option><option ${workout.status === "Teljesítve" ? "selected" : ""}>Teljesítve</option><option ${workout.status === "Lemondva" ? "selected" : ""}>Lemondva</option></select></div><div class="field span-2"><label for="workout-notes">Megjegyzés</label><textarea id="workout-notes" name="notes" placeholder="Rövid megjegyzés az edzésről">${escapeHtml(workout.notes || "")}</textarea></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edzés mentése</button></div></form></div></div>`;
 }
 
 function renderTrainerAssignmentModal(client) {
@@ -501,7 +583,13 @@ function renderTrainerModal() {
 
 function renderWorkoutModalForUser(client, workout = {}, index = "") {
   const user = currentUser();
-  const options = user.role === "admin" ? `<option value="solo" ${!workout.trainerId ? "selected" : ""}>Egyéni edzés</option>${trainers().map((trainer) => `<option value="${trainer.id}" ${workout.trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}` : `<option value="${user.id}" selected>${escapeHtml(user.name)}</option><option value="solo" ${!workout.trainerId ? "" : ""}>Egyéni edzés</option>`;
+  const trainerId = workout.trainerId || (user.role === "trainer" && index === "" ? user.id : "");
+  const availableTrainers = user.role === "admin"
+    ? trainers()
+    : user.role === "trainer"
+      ? trainers().filter((trainer) => trainer.id === user.id || trainer.id === trainerId)
+      : [];
+  const options = `<option value="solo" ${trainerId ? "" : "selected"}>Egyéni edzés</option>${availableTrainers.map((trainer) => `<option value="${trainer.id}" ${trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}`;
   return renderWorkoutModal(client, workout, index).replace(`<div class="field span-2"><label for="workout-notes">`, `<div class="field span-2"><label for="workout-trainer">Edző</label><select id="workout-trainer" name="trainerId">${options}</select></div><div class="field span-2"><label for="workout-notes">`);
 }
 
@@ -519,12 +607,22 @@ function bindModalEvents() {
     saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(id ? "Kliensadatok frissítve" : "Kliens sikeresen hozzáadva");
   });
   document.querySelector("#workout-form")?.addEventListener("submit", (event) => {
-    event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); values.duration = Number(values.duration) || 0; const client = currentUser().role === "client" ? currentUser() : selectedClient(); client.workouts ||= []; const index = event.currentTarget.dataset.index;
+    event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); values.duration = Number(values.duration) || 0; const client = data.users.find((user) => user.id === event.currentTarget.dataset.clientId) || (currentUser().role === "client" ? currentUser() : selectedClient()); if (!client) return toast("Nem található a kliens ehhez az edzéshez."); client.workouts ||= []; const index = event.currentTarget.dataset.index;
     if (values.trainerId === "solo") values.trainerId = "";
     const workoutId = index === "" ? "" : client.workouts[Number(index)]?.id || "";
     if (workoutId) values.id = workoutId;
     if (index === "") client.workouts.push(values); else client.workouts[Number(index)] = values;
     client.sessions = client.workouts.filter((workout) => workout.status === "Teljesítve").length; if (remoteMode) window.remoteStore.saveWorkout(client.id, values, workoutId).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(index === "" ? "Edzés hozzáadva" : "Edzés frissítve");
+  });
+  document.querySelector("#calendar-workout-client-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const clientId = new FormData(form).get("clientId");
+    const client = calendarClientsFor(currentUser()).find((item) => item.id === clientId);
+    if (!client) return toast("Nem található a kiválasztott kliens.");
+    const date = form.dataset.date;
+    document.querySelector("#modal-backdrop").remove();
+    openModal(renderWorkoutModalForUser(client, { date, status: "Beütemezve" }));
   });
   document.querySelector("#trainer-assignment-form")?.addEventListener("submit", (event) => {
     event.preventDefault(); selectedClient().trainerIds = new FormData(event.currentTarget).getAll("trainerIds"); if (remoteMode) window.remoteStore.updateAssignments(selectedClient().id, selectedClient().trainerIds).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast("Edzői kapcsolatok frissítve");
@@ -572,6 +670,36 @@ function bindEvents() {
     if (!document.querySelector("#delete-account")) { const button = document.createElement("button"); button.id = "delete-account"; button.className = "nav-btn btn-danger"; button.textContent = "Fiók törlése"; document.querySelector(".sidebar")?.append(button); button.addEventListener("click", deleteCurrentAccount); }
   }
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => navigateToView(button.dataset.view)));
+  document.querySelector("#calendar-previous")?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    calendarSelectedDate = toDateInputValue(calendarMonth);
+    render();
+  });
+  document.querySelector("#calendar-next")?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    calendarSelectedDate = toDateInputValue(calendarMonth);
+    render();
+  });
+  document.querySelector("#calendar-today")?.addEventListener("click", () => {
+    calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
+    calendarSelectedDate = toDateInputValue(new Date());
+    render();
+  });
+  document.querySelectorAll("[data-calendar-date]").forEach((button) => button.addEventListener("click", () => {
+    const date = dateFromInputValue(button.dataset.calendarDate);
+    if (!date) return;
+    calendarSelectedDate = button.dataset.calendarDate;
+    calendarMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+    render();
+  }));
+  document.querySelector("#calendar-add-workout")?.addEventListener("click", openCalendarWorkout);
+  document.querySelectorAll("[data-calendar-workout-client]").forEach((button) => button.addEventListener("click", () => {
+    const client = calendarClientsFor(currentUser()).find((item) => item.id === button.dataset.calendarWorkoutClient);
+    const index = Number(button.dataset.calendarWorkoutIndex);
+    const workout = client?.workouts?.[index];
+    if (!client || !workout) return toast("Ez az edzés már nem érhető el.");
+    openModal(renderWorkoutModalForUser(client, workout, index));
+  }));
   document.querySelectorAll("[data-coach-profile]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-detail", { coachId: button.dataset.coachProfile })));
   document.querySelectorAll("[data-coach-review]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-review", { coachId: button.dataset.coachReview })));
   document.querySelector("#connection-request-form")?.addEventListener("submit", async (event) => {

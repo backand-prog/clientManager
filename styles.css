@@ -112,6 +112,26 @@ tbody tr:last-child td { border-bottom: 0; }
 .session-row:last-child { border: 0; }
 .session-row p { margin: 3px 0 0; color: var(--muted); font-size: .78rem; }
 .session-row strong { font-size: .85rem; color: var(--navy); }
+.calendar-panel { overflow-x: auto; }
+.calendar-toolbar { min-width: 680px; display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 20px; }
+.calendar-toolbar h2 { min-width: 190px; text-align: center; text-transform: capitalize; }
+.calendar-toolbar .text-button { margin-left: auto; }
+.calendar-grid { min-width: 680px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.calendar-weekdays { color: var(--muted); font-size: .7rem; font-weight: 700; text-align: center; text-transform: uppercase; }
+.calendar-weekdays > div { padding: 8px 4px; }
+.calendar-day { min-width: 0; min-height: 112px; padding: 8px; border-top: 1px solid var(--line); border-right: 1px solid var(--line); }
+.calendar-day:nth-child(7n + 1) { border-left: 1px solid var(--line); }
+.calendar-day-selected { background: var(--mint); }
+.calendar-day-outside { background: #f8fbfa; }
+.calendar-day-outside .calendar-date { color: #9aa8ad; }
+.calendar-date { display: grid; place-items: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 50%; color: var(--navy); background: transparent; font-weight: 700; }
+.calendar-date:hover, .calendar-day-selected .calendar-date { color: var(--white); background: var(--blue); }
+.calendar-events { display: grid; gap: 4px; margin-top: 5px; }
+.calendar-event { display: block; min-width: 0; overflow: hidden; padding: 4px 6px; border: 0; border-radius: 4px; color: #176352; background: #e4f5ef; font-size: .67rem; text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.calendar-event:hover { background: #ccece1; }
+.calendar-more { color: var(--muted); font-size: .66rem; }
+.calendar-agenda { margin-top: 18px; }
+.calendar-agenda .panel-head p { color: var(--muted); font-size: .8rem; margin: 5px 0 0; }
 .connection-center { margin-bottom: 20px; }
 .connection-center > .panel-head { align-items: flex-start; }
 .connection-center > .panel-head p { color: var(--muted); font-size: .82rem; margin: 6px 0 0; }

@@ -11,6 +11,7 @@ Első verziós klienskezelő személyi edzők számára.
 - Kliensprofilok hozzáadása és szerkesztése
 - Kliensenkénti edzéslista az adminisztrátor számára
 - Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal, státusszal és edzővel
+- Havi edzésnaptár napválasztással; az adminisztrátorok és edzők a kliensekhez ütemezhetnek, a kliensek a saját edzéseiket tekinthetik át
 - Egyéni, edző nélküli edzések naplózása
 - Kliensregisztráció és saját profil-/fejlődésnézet
 - Szerkeszthető edzői bemutatkozás szakterülettel és legfeljebb 5 képpel
@@ -55,7 +56,7 @@ Helyi demo hozzáférések:
 
 A kipróbáláshoz jelentkezz be Sofiaként, és küldj kérést az edző `anna@formfunction.test` címére; ezután jelentkezz be edzőként, és hagyd jóvá vagy utasítsd el a kérést. Az ellenkező irány kipróbálásához Anna küldjön kérést Sofia címére. Mindkét fiók a saját nézetében látja az értesítéseket. Helyi módban a kérések és értesítések ugyanabban a böngészőben maradnak meg.
 
-Az alkalmazás az aktuális nézetet az URL-ben is jelzi, például `#/client/coaches` az edzőlistához és `#/client/coaches/trainer-1` egy edző profiljához. Így frissítéskor az oldal ugyanarra a nézetre tér vissza. A helyi demo bejelentkezése szintén megmarad az adott böngészőben; kijelentkezéshez használd a **Kijelentkezés** gombot.
+Az alkalmazás az aktuális nézetet az URL-ben is jelzi, például `#/client/coaches` az edzőlistához, `#/client/coaches/trainer-1` egy edző profiljához, illetve `#/coach/calendar` az edzői naptárhoz. Így frissítéskor az oldal ugyanarra a nézetre tér vissza. A helyi demo bejelentkezése szintén megmarad az adott böngészőben; kijelentkezéshez használd a **Kijelentkezés** gombot.
 
 Edzőként a **Bemutatkozásom** menüpontban szerkesztheted a profilodat és tölthetsz fel legfeljebb 5, egyenként legfeljebb 5 MB-os JPG/PNG/WebP képet. Supabase-módban a képek privát Storage bucketben tárolódnak, és csak hitelesített felhasználók láthatják őket. Helyi demo módban a képek az adott böngésző IndexedDB-tárhelyére kerülnek, ezért ugyanabban a böngészőben újratöltés és fiókváltás után is elérhetők; másik böngészőben vagy eszközön nem. Kliensként az **Edzők böngészése** menüpontban jelennek meg a közzétett profilok.
 
