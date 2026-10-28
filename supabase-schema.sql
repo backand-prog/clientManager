@@ -19,11 +19,21 @@ create table if not exists public.profiles (
   full_name text not null,
   specialty text,
   goal text,
+  trainer_application_status text not null default 'none',
   status text not null default 'Aktív',
   adherence integer not null default 0 check (adherence between 0 and 100),
   notes text,
   created_at timestamptz not null default now()
 );
+
+alter table public.profiles
+  add column if not exists trainer_application_status text not null default 'none';
+
+alter table public.profiles
+  drop constraint if exists profiles_trainer_application_status_check;
+alter table public.profiles
+  add constraint profiles_trainer_application_status_check
+  check (trainer_application_status in ('none', 'pending', 'approved', 'rejected'));
 
 create table if not exists public.client_trainers (
   client_id uuid not null references public.profiles(id) on delete cascade,
@@ -49,12 +59,20 @@ create table if not exists public.workouts (
 create index if not exists client_trainers_trainer_idx on public.client_trainers (trainer_id);
 create index if not exists workouts_client_idx on public.workouts (client_id, workout_date desc);
 create index if not exists workouts_trainer_idx on public.workouts (trainer_id, workout_date desc);
+create index if not exists profiles_pending_trainer_applications_idx
+on public.profiles (created_at)
+where trainer_application_status = 'pending';
 
 create or replace function public.current_role()
 returns public.user_role
 language sql stable security definer set search_path = public
 as $$
-  select role from public.profiles where id = auth.uid();
+  select case
+    when trainer_application_status in ('pending', 'rejected') then null
+    else role
+  end
+  from public.profiles
+  where id = auth.uid();
 $$;
 
 create or replace function public.is_assigned_trainer(client uuid)
@@ -108,28 +126,36 @@ drop policy if exists workouts_write on public.workouts;
 create policy workouts_write on public.workouts for insert to authenticated
 with check (
   public.current_role() = 'admin'
-  or client_id = auth.uid()
+  or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and public.is_assigned_trainer(client_id) and trainer_id = auth.uid())
-  or (trainer_id is null and client_id = auth.uid())
 );
 
 drop policy if exists workouts_update on public.workouts;
 create policy workouts_update on public.workouts for update to authenticated
-using (public.current_role() = 'admin' or client_id = auth.uid() or trainer_id = auth.uid())
-with check (public.current_role() = 'admin' or client_id = auth.uid() or trainer_id = auth.uid());
+using (
+  public.current_role() = 'admin'
+  or (public.current_role() = 'client' and client_id = auth.uid())
+  or (public.current_role() = 'trainer' and trainer_id = auth.uid())
+)
+with check (
+  public.current_role() = 'admin'
+  or (public.current_role() = 'client' and client_id = auth.uid())
+  or (public.current_role() = 'trainer' and trainer_id = auth.uid())
+);
 
 create or replace function public.handle_new_user()
 returns trigger
 language plpgsql security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, role, specialty, goal)
+  insert into public.profiles (id, full_name, role, specialty, goal, trainer_application_status)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', 'Új felhasználó'),
-    coalesce((new.raw_user_meta_data->>'role')::public.user_role, 'client'),
-    new.raw_user_meta_data->>'specialty',
-    new.raw_user_meta_data->>'goal'
+    'client',
+    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then new.raw_user_meta_data->>'specialty' else null end,
+    case when new.raw_user_meta_data->>'requested_role' = 'client' then new.raw_user_meta_data->>'goal' else null end,
+    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then 'pending' else 'none' end
   );
   return new;
 end;
@@ -312,7 +338,7 @@ begin
   from public.profiles
   where id = auth.uid();
 
-  if actor_profile.role not in ('trainer', 'client') then
+  if coalesce(public.current_role() not in ('trainer', 'client'), true) then
     raise exception 'Csak kliens vagy edző küldhet kapcsolódási kérést.';
   end if;
 
@@ -320,7 +346,8 @@ begin
   from auth.users u
   join public.profiles p on p.id = u.id
   where p.id = target_user_id
-    and p.role in ('trainer', 'client');
+    and p.role in ('trainer', 'client')
+    and p.trainer_application_status in ('none', 'approved');
 
   if not found then
     raise exception 'Nem található ilyen e-mail-című regisztrált edző vagy kliens.';
@@ -381,7 +408,8 @@ begin
   from auth.users u
   join public.profiles p on p.id = u.id
   where lower(u.email) = lower(trim(target_email))
-    and p.role in ('trainer', 'client');
+    and p.role in ('trainer', 'client')
+    and p.trainer_application_status in ('none', 'approved');
   if target_user_id is null then
     raise exception 'Nem található ilyen e-mail-című regisztrált edző vagy kliens.';
   end if;

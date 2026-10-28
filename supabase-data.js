@@ -39,6 +39,11 @@
     if (coachProfilesResult.error) throw coachProfilesResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
+    const profiles = profilesResult.data || [];
+    const currentProfile = profiles.find((profile) => profile.id === user.id);
+    const trainerApplications = currentProfile?.role === "admin"
+      ? (await accountAdmin({ action: "list-trainer-applications" })).applications || []
+      : [];
     const coachProfiles = await Promise.all((coachProfilesResult.data || []).map(async (profile) => {
       const signedResult = profile.photo_paths.length
         ? await client.storage.from("coach-profile-images").createSignedUrls(profile.photo_paths, 3600)
@@ -54,13 +59,15 @@
     }));
     return {
       sessionId: user.id,
-      users: (profilesResult.data || []).map((profile) => {
+      users: profiles.map((profile) => {
         const ownWorkouts = workouts.filter((workout) => workout.client_id === profile.id).map(mapWorkout);
         return {
           id: profile.id,
           role: profile.role,
+          trainerApplicationStatus: profile.trainer_application_status || "none",
           name: profile.full_name,
-          email: profile.id === user.id ? user.email : "",
+          email: profile.id === user.id ? user.email : trainerApplications.find((application) => application.id === profile.id)?.email || "",
+          emailConfirmed: profile.id === user.id ? Boolean(user.email_confirmed_at) : undefined,
           specialty: profile.specialty || "",
           goal: profile.goal || "",
           status: profile.status || "Aktív",
@@ -73,6 +80,7 @@
         };
       }),
       activities: [],
+      trainerApplications,
       connectionRequests: (requestsResult.data || []).map((request) => ({
         id: request.id,
         requesterId: request.requester_id,
@@ -95,6 +103,47 @@
     };
   }
 
+  async function selectAllRows(createQuery) {
+    const rows = [];
+    for (let offset = 0; ; offset += 1000) {
+      const { data, error } = await createQuery().range(offset, offset + 999);
+      if (error) throw error;
+      rows.push(...(data || []));
+      if ((data || []).length < 1000) return rows;
+    }
+  }
+
+  async function exportMyData() {
+    if (!enabled) throw new Error("A Supabase-kapcsolat nem érhető el.");
+    const { data: authData, error: authError } = await client.auth.getUser();
+    if (authError) throw authError;
+    const user = authData.user;
+    if (!user) throw new Error("A fiókadatok letöltéséhez jelentkezz be.");
+
+    const [profileResult, workouts, connections, connectionRequests, notifications, coachProfileResult] = await Promise.all([
+      client.from("profiles").select("*").eq("id", user.id).single(),
+      selectAllRows(() => client.from("workouts").select("*").eq("client_id", user.id).order("workout_date", { ascending: false })),
+      selectAllRows(() => client.from("client_trainers").select("client_id, trainer_id").or(`client_id.eq.${user.id},trainer_id.eq.${user.id}`)),
+      selectAllRows(() => client.from("connection_requests").select("*").or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`).order("created_at", { ascending: false })),
+      selectAllRows(() => client.from("connection_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false })),
+      client.from("coach_public_profiles").select("*").eq("id", user.id).maybeSingle()
+    ]);
+    for (const result of [profileResult, coachProfileResult]) {
+      if (result.error) throw result.error;
+    }
+
+    return {
+      exportedAt: new Date().toISOString(),
+      account: { email: user.email, createdAt: user.created_at, lastSignInAt: user.last_sign_in_at },
+      profile: profileResult.data,
+      workouts: workouts.map(mapWorkout),
+      connections,
+      connectionRequests,
+      notifications,
+      coachProfile: coachProfileResult.data || null
+    };
+  }
+
   async function signIn(email, password) {
     if (!enabled) return null;
     const result = await client.auth.signInWithPassword({ email, password });
@@ -107,7 +156,7 @@
     const result = await client.auth.signUp({
       email: values.email,
       password: values.password,
-      options: { emailRedirectTo: window.location.origin, data: { full_name: values.name, role: values.role, specialty: values.specialty || null, goal: values.goal || null } }
+      options: { emailRedirectTo: window.location.origin, data: { full_name: values.name, requested_role: values.role === "trainer" ? "trainer" : "client", specialty: values.role === "trainer" ? values.specialty || null : null, goal: values.role === "client" ? values.goal || null : null } }
     });
     if (result.error) throw result.error;
     return result.data.user;
@@ -223,5 +272,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

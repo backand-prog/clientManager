@@ -1,0 +1,11 @@
+{
+  "framework": null,
+  "buildCommand": "node scripts/build-static.mjs",
+  "outputDirectory": "dist",
+  "rewrites": [
+    {
+      "source": "/supabase-config.js",
+      "destination": "/api/runtime-config"
+    }
+  ]
+}
