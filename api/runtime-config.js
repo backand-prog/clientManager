@@ -9,7 +9,7 @@ module.exports = function handler(request, response) {
     return;
   }
 
-  const { VERCEL_SUPABASE_URL: url, VERCEL_SUPABASE_ANON_KEY: anonKey } = process.env;
+  const { SUPABASE_URL: url, SUPABASE_ANON_KEY: anonKey } = process.env;
   if (!url || !anonKey) {
     response.status(503).send("throw new Error('Supabase is not configured for this deployment.');");
     return;

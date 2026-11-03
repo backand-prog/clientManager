@@ -55,10 +55,10 @@ Az Edge Function a `SUPABASE_SERVICE_ROLE_KEY` értéket csak szerveroldalon has
 
 ## Vercel-bemutató telepítés
 
-Az alkalmazás Vercelre GitHub-projektként telepíthető. A build csak a böngészőnek szánt alkalmazásfájlokat teszi a `dist` könyvtárba; a SQL-séma, dokumentáció és Edge Function nem kerül a nyilvános statikus fájlok közé. A Vercel `/api/runtime-config` függvénye a projekt beállításaiban megadott `VERCEL_SUPABASE_URL` és `VERCEL_SUPABASE_ANON_KEY` értékből állítja elő a klienskonfigurációt. Ezek a böngészőben látható nyilvános Supabase-beállítások, nem titkok; a `service_role` kulcsot soha ne add meg ezek helyett.
+Az alkalmazás Vercelre GitHub-projektként telepíthető. A build csak a böngészőnek szánt alkalmazásfájlokat teszi a `dist` könyvtárba; a SQL-séma, dokumentáció és Edge Function nem kerül a nyilvános statikus fájlok közé. A Vercel `/api/runtime-config` függvénye a projekt beállításaiban megadott `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékből állítja elő a klienskonfigurációt. Ezek a böngészőben látható nyilvános Supabase-beállítások, nem titkok; a `service_role` kulcsot soha ne add meg ezek helyett.
 
 1. Importáld a GitHub-repozitóriumot Vercelbe, a projekt gyökere maradjon a repository gyökere, a framework pedig **Other**.
-2. A Vercel **Settings → Environment Variables** részében add meg a `VERCEL_SUPABASE_URL` és `VERCEL_SUPABASE_ANON_KEY` értékeket a staging Supabase-projekt publikus URL-jével és anon/publishable kulcsával, legalább a **Preview** és **Production** környezetre.
+2. A Vercel **Settings → Environment Variables** részében add meg a `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékeket a staging Supabase-projekt publikus URL-jével és anon/publishable kulcsával, legalább a **Preview** és **Production** környezetre.
 3. Ellenőrizd a **Build and Output Settings** részen, hogy a build parancs `node scripts/build-static.mjs`, a kimeneti könyvtár pedig `dist`.
 4. Futtasd le a frissített `supabase-schema.sql` sémát a staging Supabase-projekt SQL Editorában, és telepítsd az Edge Functiont: `supabase functions deploy account-admin`.
 5. A Vercel által kiosztott domain gyökerét add hozzá a staging projekt Supabase Authentication URL Configuration beállításának **Site URL** és **Redirect URLs** listájához.
