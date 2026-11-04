@@ -1,4 +1,4 @@
--- RutinNapló PostgreSQL schema for Supabase
+-- BackPlan PostgreSQL schema for Supabase
 -- Run this once in Supabase SQL Editor.
 
 create extension if not exists pgcrypto;

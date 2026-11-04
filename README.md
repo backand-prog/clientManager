@@ -1,4 +1,6 @@
-# RutinNapló klienskezelő
+# BackPlan
+
+Éles alkalmazás: [backplan-fitness.vercel.app](https://backplan-fitness.vercel.app/)
 
 Első verziós klienskezelő személyi edzők számára.
 

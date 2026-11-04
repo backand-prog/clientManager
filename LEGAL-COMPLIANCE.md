@@ -1,4 +1,4 @@
-# RutinNapló – adatvédelem és jogi megfelelés
+# BackPlan – adatvédelem és jogi megfelelés
 
 > **Fontos:** ez fejlesztési és terméktervezési összefoglaló, nem jogi tanács és nem teljes körű jogi megfelelőségi igazolás. A nyilvános szolgáltatás indítása előtt magyar adatvédelmi/fogyasztóvédelmi szakértőnek kell ellenőriznie az üzleti modellt és a végleges dokumentumokat.
 
@@ -20,7 +20,7 @@ Edzéscél és szabadszöveges megjegyzés egészségügyi adatot fedhet fel. Az
 
 - **2011. évi CXII. törvény (Infotv.)**: a GDPR melletti magyar kiegészítő szabályok és a NAIH felügyeleti szerepe.
 - A magyarországi adatkezelési panaszok felügyeleti hatósága a **Nemzeti Adatvédelmi és Információszabadság Hatóság (NAIH)**.
-- Ha a coach önállóan határozza meg, hogyan és miért kezeli a kliens edzésadatait, adatkezelő lehet; a RutinNapló üzemeltetője a tárhely és szoftver kapcsán adatfeldolgozó is lehet. A platform saját fiók-, számlázási és biztonsági céljaira külön adatkezelő lehet. E szerepeket szerződésben és a valós működéshez igazodva kell tisztázni; a termék jelen állapotában ez még nincs eldöntve.
+- Ha a coach önállóan határozza meg, hogyan és miért kezeli a kliens edzésadatait, adatkezelő lehet; a BackPlan üzemeltetője a tárhely és szoftver kapcsán adatfeldolgozó is lehet. A platform saját fiók-, számlázási és biztonsági céljaira külön adatkezelő lehet. E szerepeket szerződésben és a valós működéshez igazodva kell tisztázni; a termék jelen állapotában ez még nincs eldöntve.
 
 ### Sütik és böngészős tárolás – ePrivacy
 
@@ -42,14 +42,14 @@ Az alkalmazás Supabase JS könyvtárat tölt be a jsDelivr CDN-ről; emiatt a b
 - **2001. évi CVIII. törvény** az elektronikus kereskedelmi és információs társadalommal összefüggő szolgáltatásokról: többek között a szolgáltató azonosítható adatai és az elektronikus szerződéskötés tájékoztatása.
 - **45/2014. (II. 26.) Korm. rendelet**, valamint a 2011/83/EU fogyasztói jogokról szóló irányelv: fogyasztói távollévők közötti szerződés, előzetes ár- és szerződési tájékoztatás, elállás/felmondás és digitális szolgáltatás megkezdése. A kivételek és az azonnali teljesítéshez szükséges fogyasztói nyilatkozatok terméktípusonként eltérnek.
 - Edzők és kliensek is lehetnek fizetők, de eltérhet, hogy az edző üzleti előfizetést vásárol-e vagy a kliens fogyasztóként edzés-/digitális szolgáltatást. A fizető fél, szerződő szolgáltató, csomag, teljes ár, időszak, megújulás, lemondás és elállás még nincs meghatározva.
-- A fizetési szolgáltató még nincs kiválasztva. Kártyaadatot ne tároljon a RutinNapló; fizetést és erős ügyfél-hitelesítést szerződött fizetési szolgáltató kezeljen. Számlázási és adózási kötelezettségekhez könyvelői ellenőrzés is szükséges.
+- A fizetési szolgáltató még nincs kiválasztva. Kártyaadatot ne tároljon a BackPlan; fizetést és erős ügyfél-hitelesítést szerződött fizetési szolgáltató kezeljen. Számlázási és adózási kötelezettségekhez könyvelői ellenőrzés is szükséges.
 
 ### Marketing és lehetséges további szabályok
 
 - **2008. évi XLVIII. törvény** a gazdasági reklámtevékenységről: hírlevélhez és közvetlen marketinghez külön hozzájárulás és leiratkozási folyamat kell. Jelenleg nem küldünk marketingüzenetet; az értesítések kizárólag a kért alkalmazásfunkcióról szólnak.
 - **Digitális Szolgáltatásokról szóló (EU) 2022/2065 rendelet (DSA)**: a coach-profilok és képek tárolása miatt meg kell vizsgálni, hogy a szolgáltatás közvetítő tárhelyszolgáltatásnak minősül-e, és milyen bejelentési, kapcsolattartói vagy moderációs kötelezettség vonatkozik rá. A felhasználói tartalom nyilvánossága és az üzleti szerep döntő.
 - **Európai Akadálymentességi Irányelv (EU) 2019/882**: a szolgáltatás terjedelmét és a szolgáltató mikrovállalkozási státuszát ellenőrizni kell; ahol kötelező vagy üzletileg indokolt, a felületet akadálymentesíteni kell.
-- A RutinNapló jelenleg nem használ algoritmikus profilalkotást vagy AI-alapú döntést. Új elemzési vagy automatizált döntési funkció bevezetése új jogi és adatvédelmi felülvizsgálatot igényel.
+- A BackPlan jelenleg nem használ algoritmikus profilalkotást vagy AI-alapú döntést. Új elemzési vagy automatizált döntési funkció bevezetése új jogi és adatvédelmi felülvizsgálatot igényel.
 
 ## Amit a kódban most megvalósítottunk
 
@@ -65,7 +65,7 @@ Az alkalmazás Supabase JS könyvtárat tölt be a jsDelivr CDN-ről; emiatt a b
 
 1. A szolgáltató hivatalos neve, székhelye, nyilvántartási adata, adószáma, valós ügyfélszolgálati és adatvédelmi elérhetősége.
 2. Üzleti és szerződéses szerepek: ki nyújt edzést, ki szerződik a klienssel, ki fizet kinek, a coachok adatkezelői/adatfeldolgozói minősége.
-3. Coachokkal kötendő GDPR 28. cikk szerinti adatfeldolgozói feltételek, ha a RutinNapló az ő utasításaik alapján tárol adatot.
+3. Coachokkal kötendő GDPR 28. cikk szerinti adatfeldolgozói feltételek, ha a BackPlan az ő utasításaik alapján tárol adatot.
 4. Supabase-projekt régiója, Supabase és tárhely/CDN szolgáltatók szerződései, al-adatfeldolgozói listája, adattovábbítási garanciák, és pontosan közölt adatkezelők.
 5. Minden adatcsoporthoz cél, jogalap, címzett, megőrzési idő; törlési, biztonsági mentési és incidenskezelési eljárás; szükség esetén adatkezelési nyilvántartás és DPIA.
 6. Előfizetésnél: fizetési szolgáltató, pontos ár és adók, számlázás, ismétlődő terhelés, lemondás/elállás, panaszkezelés és a digitális szolgáltatás megkezdéséhez szükséges fogyasztói nyilatkozatok.

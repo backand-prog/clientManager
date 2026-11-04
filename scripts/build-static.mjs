@@ -17,6 +17,6 @@ for (const file of staticFiles) {
 }
 
 await cp(
-  new URL("../RutinNaplo_felhasznaloi_kezikonyv.pdf", import.meta.url),
-  new URL("RutinNaplo_felhasznaloi_kezikonyv.pdf", outputDirectory)
+  new URL("../BackPlan_felhasznaloi_kezikonyv.pdf", import.meta.url),
+  new URL("BackPlan_felhasznaloi_kezikonyv.pdf", outputDirectory)
 );
