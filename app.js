@@ -88,6 +88,7 @@ function routeForCurrentState() {
     if (currentView === "clients") return "/admin/clients";
     if (currentView === "trainers") return "/admin/trainers";
     if (currentView === "trainer-applications") return "/admin/trainer-applications";
+    if (currentView === "administrators") return "/admin/administrators";
     if (currentView === "notifications") return "/admin/notifications";
     if (currentView === "coach-profiles") return "/admin/coach-profiles";
     if (currentView === "coach-profile-review") return `/admin/coach-profiles/${encodeURIComponent(selectedCoachId || "")}`;
@@ -153,6 +154,7 @@ function restoreRouteFromUrl() {
     } else if (segments[0] === "admin" && segments[1] === "clients") currentView = "clients";
     else if (segments[0] === "admin" && segments[1] === "trainers") currentView = "trainers";
     else if (segments[0] === "admin" && segments[1] === "trainer-applications") currentView = "trainer-applications";
+    else if (segments[0] === "admin" && segments[1] === "administrators") currentView = "administrators";
     else if (segments[0] === "admin" && segments[1] === "notifications") currentView = "notifications";
     else if (segments[0] === "admin" && segments[1] === "coach-profiles" && segments[2]) {
       currentView = "coach-profile-review";
@@ -451,8 +453,24 @@ async function refreshRemote() {
   if (!remoteMode) return;
   try {
     const remoteData = await window.remoteStore.load();
-    if (remoteData) { data = remoteData; session = remoteData.sessionId; localStorage.removeItem(SESSION_KEY); render(); }
+    if (remoteData) {
+      data = remoteData;
+      session = remoteData.sessionId;
+      localStorage.removeItem(SESSION_KEY);
+      if (currentView === "administrators") data.adminAccounts = await window.remoteStore.listAdminAccounts();
+      render();
+    }
   } catch (error) { toast(`Adatbázis-hiba: ${error.message}`); }
+}
+
+async function loadAdminAccounts() {
+  if (!remoteMode) return;
+  try {
+    data.adminAccounts = await window.remoteStore.listAdminAccounts();
+    render();
+  } catch (error) {
+    toast(`Nem sikerült betölteni az adminisztrátori fiókokat: ${error.message}`);
+  }
 }
 
 async function initializeRemote() {
@@ -482,6 +500,7 @@ async function initializeRemote() {
       session = remoteData.sessionId;
       localStorage.removeItem(SESSION_KEY);
       restoreRouteFromUrl();
+      if (currentView === "administrators") data.adminAccounts = await window.remoteStore.listAdminAccounts();
       render();
     } else if (currentUser() && isLocalDevelopmentHost()) {
       remoteMode = false;
@@ -630,6 +649,24 @@ function renderTrainerApplications() {
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzői jelentkezések</div><h1>Edzői jelentkezések</h1><p>E-mail-megerősítés után hagyd jóvá vagy utasítsd el az edzői hozzáférést.</p></div></div><section class="panel">${applications.length ? applications.map((application) => `<div class="connection-row"><div><strong>${escapeHtml(application.full_name)}</strong><p>${escapeHtml(application.email || "Nincs e-mail-cím")} · ${escapeHtml(application.specialty || "Nincs megadva szakterület")}</p><small>${application.created_at ? `Jelentkezett: ${escapeHtml(new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(application.created_at)))}` : ""}${application.emailConfirmed ? " · E-mail megerősítve" : " · E-mail-megerősítésre vár"}</small></div><button class="btn btn-teal" data-trainer-application="approved" data-user-id="${escapeHtml(application.id)}" ${application.emailConfirmed ? "" : "disabled"}>Jóváhagyás</button><button class="btn btn-ghost" data-trainer-application="rejected" data-user-id="${escapeHtml(application.id)}">Elutasítás</button></div>`).join("") : `<div class="empty-state">Nincs elbírálásra váró edzői jelentkezés.</div>`}</section>`;
 }
 
+function renderAdminAccounts() {
+  const accounts = remoteMode ? data.adminAccounts : data.users || [];
+  const rows = (accounts || []).map((account) => {
+    const canPromote = account.role === "client" && account.id !== currentUser()?.id && account.emailConfirmed !== false;
+    const emailStatus = account.emailConfirmed === false ? "E-mail nincs megerősítve" : "";
+    const roleLabel = account.role === "admin" ? "Adminisztrátor" : account.role === "trainer" ? "Edző" : "Kliens";
+    const action = canPromote
+      ? `<button type="button" class="btn btn-ghost" data-grant-admin="${escapeHtml(account.id)}">Adminjog megadása</button>`
+      : account.role === "admin" ? "Már admin" : account.role === "client" && account.emailConfirmed === false ? "E-mail-megerősítés szükséges" : "Nem emelhető adminná";
+    return `<tr><td><div class="client-cell"><div class="avatar">${initials(account.name || "")}</div>${escapeHtml(account.name || "Névtelen fiók")}</div></td><td>${escapeHtml(account.email || "Nincs elérhető e-mail-cím")}${emailStatus ? `<small class="account-email-status">${emailStatus}</small>` : ""}</td><td><span class="status ${account.role === "admin" ? "status-active" : "status-paused"}">${roleLabel}</span></td><td>${action}</td></tr>`;
+  }).join("");
+  const accountContent = !accounts
+    ? `<div class="empty-state">Adminisztrátori fiókok betöltése…</div>`
+    : rows ? `<div class="table-wrap admin-accounts-table"><table><thead><tr><th>Név</th><th>E-mail-cím</th><th>Szerepkör</th><th>Művelet</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : `<div class="empty-state">Nincs megjeleníthető fiók.</div>`;
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Adminisztrátorok</div><h1>Adminjogosultságok</h1><p>Regisztrált, megerősített kliensfiókok adminisztrátorrá emelése.</p></div></div><section class="panel"><div class="legal-status" role="note">Csak megerősített e-mail-című fióknak adhatsz adminjogot. Az adminisztrátorok azonos jogosultságúak; csak megbízható fióknak add meg ezt a szerepkört.</div>${accountContent}</section>`;
+}
+
 function renderUserGuide() {
   return `<div class="topbar"><div><div class="eyebrow">Súgó</div><h1>Felhasználói kézikönyv</h1><p>A RutinNapló funkcióinak és szerepköreinek útmutatója.</p></div></div><section class="panel guide-panel"><h2>Olvasd el vagy töltsd le a kézikönyvet</h2><p class="settings-help">A PDF fejezetenként ismerteti az adminisztrátori, edzői és kliensfunkciókat, képernyőképekkel és példákkal.</p><div class="topbar-actions"><a class="btn btn-ghost" href="/RutinNaplo_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Megnyitás új lapon</a><a class="btn btn-teal" href="/RutinNaplo_felhasznaloi_kezikonyv.pdf" download="RutinNaplo_felhasznaloi_kezikonyv.pdf">PDF letöltése</a></div></section>`;
 }
@@ -638,7 +675,7 @@ function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
   const navigation = isAdmin
-    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
     : isTrainer
       ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`;
@@ -675,6 +712,7 @@ function renderAdminContent() {
   if (currentView === "clients") return renderClients();
   if (currentView === "trainers") return renderTrainers();
   if (currentView === "trainer-applications") return renderTrainerApplications();
+  if (currentView === "administrators") return renderAdminAccounts();
   if (currentView === "coach-profiles") return renderAdminCoachProfiles();
   if (currentView === "coach-profile-review") return renderCoachProfileDetail();
   if (currentView === "client-detail") return renderEnhancedClientDetail(selectedClient());
@@ -901,6 +939,30 @@ async function deleteTrainer(trainerId) {
   catch (error) { toast(`Nem sikerült törölni: ${error.message}`); }
 }
 
+async function grantAdminRole(userId) {
+  const account = (remoteMode ? data.adminAccounts : data.users)?.find((item) => item.id === userId);
+  if (!account || account.role !== "client" || account.emailConfirmed === false) return;
+  if (!confirm(`Biztosan adminisztrátori jogosultságot adsz ${account.name || account.email} fiókjának? Az adminok minden adminisztrátori funkcióhoz hozzáférnek.`)) return;
+  try {
+    if (remoteMode) {
+      await window.remoteStore.accountAdmin({ action: "grant-admin", userId });
+      const remoteData = await window.remoteStore.load();
+      if (!remoteData) throw new Error("A fiók frissítése után nem sikerült újratölteni az adatokat.");
+      data = remoteData;
+      session = remoteData.sessionId;
+      data.adminAccounts = await window.remoteStore.listAdminAccounts();
+    } else {
+      account.role = "admin";
+      account.trainerApplicationStatus = "none";
+      saveData();
+    }
+    render();
+    toast("Az adminjogosultság megadva.");
+  } catch (error) {
+    toast(`Nem sikerült adminjogot adni: ${error.message}`);
+  }
+}
+
 function bindEvents() {
   bindStorageNoticeEvents();
   if (remoteMode) document.querySelector("#login-form")?.addEventListener("submit", remoteLogin, { capture: true });
@@ -950,7 +1012,11 @@ function bindEvents() {
   });
   document.querySelector("#export-my-data")?.addEventListener("click", exportMyData);
   document.querySelector("#delete-account")?.addEventListener("click", deleteCurrentAccount);
-  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => navigateToView(button.dataset.view)));
+  document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
+    navigateToView(button.dataset.view);
+    if (button.dataset.view === "administrators") void loadAdminAccounts();
+  }));
+  document.querySelectorAll("[data-grant-admin]").forEach((button) => button.addEventListener("click", () => grantAdminRole(button.dataset.grantAdmin)));
   document.querySelectorAll("[data-trainer-application]").forEach((button) => button.addEventListener("click", async () => {
     const userId = button.dataset.userId;
     const decision = button.dataset.trainerApplication;

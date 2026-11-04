@@ -253,6 +253,12 @@
     return result.data;
   }
 
+  async function listAdminAccounts() {
+    if (!enabled) return [];
+    const result = await accountAdmin({ action: "list-admin-accounts" });
+    return result.accounts || [];
+  }
+
   async function requestPasswordReset(email) {
     if (!enabled) return null;
     const result = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/?password-reset=1` });
@@ -272,5 +278,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

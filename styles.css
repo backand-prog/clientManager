@@ -78,6 +78,7 @@ h3 { font: 700 1rem "Segoe UI", system-ui, sans-serif; margin: 0; }
 .panel { background: var(--white); border: 1px solid var(--line); border-radius: 8px; padding: 22px; }
 .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
 .table-wrap { overflow-x: auto; }
+.account-email-status { display: block; color: var(--muted); font-size: .72rem; margin-top: 4px; }
 table { border-collapse: collapse; width: 100%; min-width: 500px; }
 th { text-align: left; color: #829199; text-transform: uppercase; letter-spacing: .09em; font-size: .67rem; padding: 0 10px 11px; border-bottom: 1px solid var(--line); }
 td { padding: 14px 10px; border-bottom: 1px solid #edf2f2; font-size: .87rem; }

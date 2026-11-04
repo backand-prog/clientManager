@@ -88,6 +88,54 @@ Deno.serve(async (request) => {
       return json({ applications: results });
     }
 
+    if (body.action === "list-admin-accounts") {
+      const { data: profiles, error: profilesError } = await adminClient
+        .from("profiles")
+        .select("id, full_name, role, created_at")
+        .in("role", ["client", "admin"])
+        .order("created_at", { ascending: true });
+      if (profilesError) return json({ error: profilesError.message }, 500);
+
+      const accounts = await Promise.all((profiles || []).map(async (profile) => {
+        const { data, error: userError } = await adminClient.auth.admin.getUserById(profile.id);
+        if (userError) throw userError;
+        return {
+          id: profile.id,
+          name: profile.full_name,
+          role: profile.role,
+          createdAt: profile.created_at,
+          email: data.user?.email || "",
+          emailConfirmed: Boolean(data.user?.email_confirmed_at)
+        };
+      }));
+      return json({ accounts });
+    }
+
+    if (body.action === "grant-admin") {
+      if (typeof body.userId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.userId)) {
+        return json({ error: "Érvénytelen felhasználó." }, 400);
+      }
+      if (body.userId === authData.user.id) {
+        return json({ error: "Saját magad adminná emelése nem támogatott." }, 400);
+      }
+      const { data: target, error: targetError } = await adminClient.auth.admin.getUserById(body.userId);
+      if (targetError) return json({ error: targetError.message }, 500);
+      if (!target.user?.email_confirmed_at) {
+        return json({ error: "Az adminjog megadásához a felhasználónak meg kell erősítenie az e-mail-címét." }, 400);
+      }
+
+      const { data: updated, error: updateError } = await adminClient
+        .from("profiles")
+        .update({ role: "admin", trainer_application_status: "none" })
+        .eq("id", body.userId)
+        .eq("role", "client")
+        .select("id")
+        .maybeSingle();
+      if (updateError) return json({ error: updateError.message }, 500);
+      if (!updated) return json({ error: "A felhasználó nem kliens, vagy már adminisztrátor." }, 409);
+      return json({ ok: true });
+    }
+
     if (body.action === "decide-trainer-application") {
       if (typeof body.userId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.userId)) {
         return json({ error: "Érvénytelen jelentkező." }, 400);
