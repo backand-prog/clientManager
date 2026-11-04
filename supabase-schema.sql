@@ -35,6 +35,46 @@ alter table public.profiles
   add constraint profiles_trainer_application_status_check
   check (trainer_application_status in ('none', 'pending', 'approved', 'rejected'));
 
+create or replace function public.prevent_last_admin_removal()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  should_check boolean := false;
+begin
+  if old.role = 'admin' then
+    if tg_op = 'DELETE' then
+      should_check := true;
+    elsif new.role <> 'admin' then
+      should_check := true;
+    end if;
+    if should_check then
+      perform pg_catalog.pg_advisory_xact_lock(87243, 1);
+      if not exists (
+        select 1
+        from public.profiles
+        where role = 'admin' and id <> old.id
+      ) then
+        raise exception using
+          errcode = '23514',
+          message = 'Az utolsó adminfiók nem törölhető és nem fokozható le.';
+      end if;
+    end if;
+  end if;
+  if tg_op = 'DELETE' then return old; end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_prevent_last_admin_removal on public.profiles;
+create trigger profiles_prevent_last_admin_removal
+before update of role or delete on public.profiles
+for each row execute function public.prevent_last_admin_removal();
+
+revoke all on function public.prevent_last_admin_removal() from public, anon, authenticated;
+
 create table if not exists public.client_trainers (
   client_id uuid not null references public.profiles(id) on delete cascade,
   trainer_id uuid not null references public.profiles(id) on delete cascade,

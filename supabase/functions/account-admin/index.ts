@@ -8,7 +8,29 @@ const corsHeaders = {
 
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
+async function ensureAdminCanBeDeleted(adminClient: ReturnType<typeof createClient>, userId: string) {
+  const { data: profile, error: profileError } = await adminClient
+    .from("profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+  if (profileError) return profileError;
+  if (profile?.role !== "admin") return null;
+
+  const { count, error } = await adminClient
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .eq("role", "admin")
+    .neq("id", userId);
+  if (error) return error;
+  if (!count) return new Error("Az utolsó adminfiók nem törölhető. Előbb adj adminjogot egy másik fióknak.");
+  return null;
+}
+
 async function deleteUserAndPhotos(adminClient: ReturnType<typeof createClient>, userId: string) {
+  const adminDeletionError = await ensureAdminCanBeDeleted(adminClient, userId);
+  if (adminDeletionError) return adminDeletionError;
+
   const { data: coachProfile, error: profileError } = await adminClient
     .from("coach_public_profiles")
     .select("photo_paths")
