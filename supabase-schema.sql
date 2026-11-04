@@ -536,3 +536,263 @@ grant execute on function public.create_connection_request(text) to authenticate
 grant execute on function public.create_connection_request_by_id(uuid) to authenticated;
 grant execute on function public.respond_connection_request(uuid, text) to authenticated;
 grant execute on function public.mark_connection_notifications_read() to authenticated;
+
+create table if not exists public.group_workouts (
+  id uuid primary key default gen_random_uuid(),
+  trainer_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null check (char_length(trim(title)) between 1 and 120),
+  description text not null default '' check (char_length(description) <= 2000),
+  starts_at timestamptz not null,
+  duration_minutes integer not null check (duration_minutes between 1 and 480),
+  capacity integer not null check (capacity between 2 and 100),
+  cancelled_at timestamptz,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.group_workout_registrations (
+  group_workout_id uuid not null references public.group_workouts(id) on delete cascade,
+  client_id uuid not null references public.profiles(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  primary key (group_workout_id, client_id)
+);
+
+create index if not exists group_workouts_trainer_start_idx
+on public.group_workouts (trainer_id, starts_at);
+create index if not exists group_workout_registrations_client_idx
+on public.group_workout_registrations (client_id, group_workout_id);
+
+alter table public.group_workouts enable row level security;
+alter table public.group_workout_registrations enable row level security;
+
+drop policy if exists group_workouts_read on public.group_workouts;
+create policy group_workouts_read on public.group_workouts
+for select to authenticated
+using (
+  trainer_id = auth.uid()
+  or public.current_role() = 'admin'
+  or exists (
+    select 1 from public.client_trainers ct
+    where ct.client_id = auth.uid() and ct.trainer_id = group_workouts.trainer_id
+  )
+);
+
+drop policy if exists group_workouts_trainer_insert on public.group_workouts;
+create policy group_workouts_trainer_insert on public.group_workouts
+for insert to authenticated
+with check (trainer_id = auth.uid() and public.current_role() = 'trainer');
+
+drop policy if exists group_workout_registrations_read on public.group_workout_registrations;
+create policy group_workout_registrations_read on public.group_workout_registrations
+for select to authenticated
+using (
+  client_id = auth.uid()
+  or public.current_role() = 'admin'
+  or exists (
+    select 1 from public.group_workouts gw
+    where gw.id = group_workout_registrations.group_workout_id
+      and gw.trainer_id = auth.uid()
+  )
+);
+
+revoke all on public.group_workouts, public.group_workout_registrations from public, anon, authenticated;
+grant select on public.group_workouts, public.group_workout_registrations to authenticated;
+grant insert (trainer_id, title, description, starts_at, duration_minutes, capacity)
+on public.group_workouts to authenticated;
+
+create or replace function public.get_group_workouts()
+returns table (
+  id uuid,
+  trainer_id uuid,
+  trainer_name text,
+  title text,
+  description text,
+  starts_at timestamptz,
+  duration_minutes integer,
+  capacity integer,
+  participant_count bigint,
+  is_registered boolean,
+  cancelled_at timestamptz
+)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select
+    gw.id,
+    gw.trainer_id,
+    p.full_name,
+    gw.title,
+    gw.description,
+    gw.starts_at,
+    gw.duration_minutes,
+    gw.capacity,
+    (select count(*) from public.group_workout_registrations gwr where gwr.group_workout_id = gw.id),
+    exists (
+      select 1 from public.group_workout_registrations gwr
+      where gwr.group_workout_id = gw.id and gwr.client_id = auth.uid()
+    ),
+    gw.cancelled_at
+  from public.group_workouts gw
+  join public.profiles p on p.id = gw.trainer_id
+  where auth.uid() is not null
+    and (
+      public.current_role() = 'admin'
+      or gw.trainer_id = auth.uid()
+      or exists (
+        select 1 from public.client_trainers ct
+        where ct.client_id = auth.uid() and ct.trainer_id = gw.trainer_id
+      )
+    )
+  order by gw.starts_at;
+$$;
+
+create or replace function public.create_group_workout(
+  workout_title text,
+  workout_description text,
+  workout_starts_at timestamptz,
+  workout_duration_minutes integer,
+  workout_capacity integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  new_workout_id uuid;
+begin
+  if auth.uid() is null or public.current_role() <> 'trainer' then
+    raise exception 'Csoportos edzést csak bejelentkezett edző hozhat létre.';
+  end if;
+  if char_length(trim(coalesce(workout_title, ''))) not between 1 and 120 then
+    raise exception 'Az edzés neve 1 és 120 karakter közötti legyen.';
+  end if;
+  if char_length(coalesce(workout_description, '')) > 2000 then
+    raise exception 'A leírás legfeljebb 2000 karakter lehet.';
+  end if;
+  if workout_starts_at is null or workout_starts_at <= now() then
+    raise exception 'Csoportos edzés csak jövőbeli időpontra hozható létre.';
+  end if;
+  if workout_duration_minutes not between 1 and 480 then
+    raise exception 'Az időtartam 1 és 480 perc közötti legyen.';
+  end if;
+  if workout_capacity not between 2 and 100 then
+    raise exception 'A létszám 2 és 100 fő közötti legyen.';
+  end if;
+
+  insert into public.group_workouts (trainer_id, title, description, starts_at, duration_minutes, capacity)
+  values (auth.uid(), trim(workout_title), coalesce(workout_description, ''), workout_starts_at, workout_duration_minutes, workout_capacity)
+  returning id into new_workout_id;
+  return new_workout_id;
+end;
+$$;
+
+create or replace function public.join_group_workout(workout_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  workout_row public.group_workouts%rowtype;
+  registration_count integer;
+begin
+  if auth.uid() is null or public.current_role() <> 'client' then
+    raise exception 'Csoportos edzésre csak bejelentkezett kliens jelentkezhet.';
+  end if;
+
+  select * into workout_row
+  from public.group_workouts
+  where id = workout_id
+  for update;
+  if not found then
+    raise exception 'A csoportos edzés nem található.';
+  end if;
+  if not exists (
+    select 1 from public.client_trainers ct
+    where ct.client_id = auth.uid() and ct.trainer_id = workout_row.trainer_id
+  ) then
+    raise exception 'Csak az edzőhöz kapcsolt kliensek jelentkezhetnek.';
+  end if;
+  if workout_row.cancelled_at is not null then
+    raise exception 'A csoportos edzést az edző lemondta.';
+  end if;
+  if workout_row.starts_at <= now() then
+    raise exception 'Az edzés kezdete után már nem lehet jelentkezni.';
+  end if;
+  if exists (
+    select 1 from public.group_workout_registrations gwr
+    where gwr.group_workout_id = workout_id and gwr.client_id = auth.uid()
+  ) then
+    return workout_id;
+  end if;
+
+  select count(*) into registration_count
+  from public.group_workout_registrations
+  where group_workout_id = workout_id;
+  if registration_count >= workout_row.capacity then
+    raise exception 'A csoportos edzés betelt.';
+  end if;
+
+  insert into public.group_workout_registrations (group_workout_id, client_id)
+  values (workout_id, auth.uid());
+  return workout_id;
+end;
+$$;
+
+create or replace function public.leave_group_workout(workout_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  workout_row public.group_workouts%rowtype;
+begin
+  if auth.uid() is null or public.current_role() <> 'client' then
+    raise exception 'Csak bejelentkezett kliens iratkozhat le.';
+  end if;
+  select * into workout_row
+  from public.group_workouts
+  where id = workout_id
+  for update;
+  if not found or workout_row.starts_at <= now() then
+    raise exception 'A kezdés után már nem lehet leiratkozni.';
+  end if;
+  delete from public.group_workout_registrations
+  where group_workout_id = workout_id and client_id = auth.uid();
+  return workout_id;
+end;
+$$;
+
+create or replace function public.cancel_group_workout(workout_id uuid)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or public.current_role() <> 'trainer' then
+    raise exception 'Csoportos edzést csak edző mondhat le.';
+  end if;
+  update public.group_workouts
+  set cancelled_at = coalesce(cancelled_at, now())
+  where id = workout_id and trainer_id = auth.uid();
+  if not found then
+    raise exception 'A csoportos edzés nem található, vagy nem a te edzésed.';
+  end if;
+  return workout_id;
+end;
+$$;
+
+revoke all on function public.get_group_workouts() from public;
+revoke all on function public.create_group_workout(text, text, timestamptz, integer, integer) from public;
+revoke all on function public.join_group_workout(uuid) from public;
+revoke all on function public.leave_group_workout(uuid) from public;
+revoke all on function public.cancel_group_workout(uuid) from public;
+grant execute on function public.get_group_workouts() to authenticated;
+grant execute on function public.create_group_workout(text, text, timestamptz, integer, integer) to authenticated;
+grant execute on function public.join_group_workout(uuid) to authenticated;
+grant execute on function public.leave_group_workout(uuid) to authenticated;
+grant execute on function public.cancel_group_workout(uuid) to authenticated;

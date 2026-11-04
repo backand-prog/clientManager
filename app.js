@@ -26,6 +26,7 @@ let selectedClientId = null;
 let selectedCoachId = null;
 let calendarMonth = new Date(new Date().getFullYear(), new Date().getMonth(), 1);
 let calendarSelectedDate = toDateInputValue(new Date());
+let adminDashboardPeriod = "month";
 let remoteMode = Boolean(window.remoteStore?.enabled);
 let localPhotoDbPromise;
 let storageNoticeDismissed = false;
@@ -230,7 +231,7 @@ async function restoreLocalCoachPhotos() {
 }
 
 function loadData() {
-  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; if (!Array.isArray(stored.coachProfiles)) stored.coachProfiles = structuredClone(seedData.coachProfiles); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
+  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; stored.groupWorkouts ||= []; if (!Array.isArray(stored.coachProfiles)) stored.coachProfiles = structuredClone(seedData.coachProfiles); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
   catch { return structuredClone(seedData); }
 }
 function saveData() {
@@ -318,6 +319,105 @@ function nextSessionLabel(user) {
   if (!next) return "Nincs beütemezve";
   const date = new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(dateFromInputValue(next.date));
   return `${date} · ${next.workout.time || "Időpont nincs megadva"}`;
+}
+
+function groupWorkoutDate(workout) {
+  const date = new Date(workout.startsAt);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function groupWorkoutTime(workout) {
+  const date = groupWorkoutDate(workout);
+  return date ? new Intl.DateTimeFormat("hu-HU", { hour: "2-digit", minute: "2-digit" }).format(date) : "";
+}
+
+function groupWorkoutDateLabel(workout) {
+  const date = groupWorkoutDate(workout);
+  return date ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(date) : "";
+}
+
+function visibleGroupWorkouts(user = currentUser()) {
+  if (!user) return [];
+  return (data.groupWorkouts || []).filter((workout) => {
+    if (user.role === "admin") return true;
+    if (user.role === "trainer") return workout.trainerId === user.id;
+    return (user.trainerIds || []).includes(workout.trainerId);
+  });
+}
+
+function upcomingGroupWorkouts(user = currentUser()) {
+  const now = Date.now();
+  return visibleGroupWorkouts(user)
+    .filter((workout) => {
+      const date = groupWorkoutDate(workout);
+      if (!date || date.getTime() <= now || workout.cancelledAt) return false;
+      return true;
+    })
+    .sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt));
+}
+
+function adminWorkoutRecords() {
+  return data.users.filter((user) => user.role === "client").flatMap((client) =>
+    (client.workouts || []).map((workout) => ({
+      client,
+      workout,
+      date: workoutDateToInputValue(workout.date),
+      time: workout.time || "",
+      title: workout.type,
+      status: workout.status,
+      trainerId: workout.trainerId || "",
+      startsAt: `${workoutDateToInputValue(workout.date)}T${workout.time || "00:00"}`
+    }))
+  ).filter((record) => record.date);
+}
+
+function adminPeriodData(period) {
+  const now = new Date();
+  let start;
+  let bucketCount;
+  let bucketDates;
+  let labels;
+  if (period === "week") {
+    start = new Date(now.getFullYear(), now.getMonth(), now.getDate() - ((now.getDay() + 6) % 7));
+    bucketCount = 7;
+    bucketDates = Array.from({ length: bucketCount }, (_, index) => new Date(start.getFullYear(), start.getMonth(), start.getDate() + index));
+    labels = bucketDates.map((date) => new Intl.DateTimeFormat("hu-HU", { weekday: "short" }).format(date));
+  } else if (period === "year") {
+    start = new Date(now.getFullYear(), 0, 1);
+    bucketCount = 12;
+    bucketDates = Array.from({ length: bucketCount }, (_, index) => new Date(now.getFullYear(), index, 1));
+    labels = bucketDates.map((date) => new Intl.DateTimeFormat("hu-HU", { month: "short" }).format(date));
+  } else {
+    period = "month";
+    start = new Date(now.getFullYear(), now.getMonth(), 1);
+    bucketCount = 5;
+    bucketDates = Array.from({ length: bucketCount }, (_, index) => new Date(start.getFullYear(), start.getMonth(), index * 7 + 1));
+    labels = bucketDates.map((date, index) => {
+      const from = index * 7 + 1;
+      const to = Math.min(from + 6, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+      return `${from}–${to}.`;
+    });
+  }
+  const end = period === "week"
+    ? new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7)
+    : period === "year"
+      ? new Date(start.getFullYear() + 1, 0, 1)
+      : new Date(start.getFullYear(), start.getMonth() + 1, 1);
+  const records = adminWorkoutRecords().filter((record) => {
+    const date = dateFromInputValue(record.date);
+    return date && date >= start && date < end;
+  });
+  const buckets = Array.from({ length: bucketCount }, (_, index) => ({ label: labels[index], completed: 0, cancelled: 0 }));
+  records.forEach((record) => {
+    let index;
+    const date = dateFromInputValue(record.date);
+    if (period === "week") index = Math.floor((date - start) / 86400000);
+    else if (period === "year") index = date.getMonth();
+    else index = Math.floor((date.getDate() - 1) / 7);
+    if (record.status === "Teljesítve") buckets[index].completed += 1;
+    if (record.status === "Lemondva") buckets[index].cancelled += 1;
+  });
+  return { records, buckets };
 }
 
 function addLocalNotification(userId, requestId, kind, message) {
@@ -693,7 +793,8 @@ function renderTrainerContent(trainer) {
   const clients = data.users.filter((user) => user.role === "client" && (user.trainerIds || []).includes(trainer.id));
   const sessions = clients.reduce((total, client) => total + (client.workouts || []).filter((workout) => workout.trainerId === trainer.id).length, 0);
   const upcoming = upcomingWorkouts(clients).filter((item) => item.workout.trainerId === trainer.id).slice(0, 5);
-  return `<div class="topbar"><div><div class="eyebrow">Edzői tér</div><h1>Szia, ${escapeHtml(trainer.name.split(" ")[1] || trainer.name)}.</h1><p>A klienseid és a közelgő edzéseid áttekintése.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="clients">Kliensek</button><button class="btn btn-teal" data-view="calendar">Naptár</button></div></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Hozzád rendelt kliens</div><div class="trend">Aktív kapcsolat</div></div><div class="stat"><div class="number">${sessions}</div><div class="label">Edzés a naplóban</div><div class="trend">Összes rögzített edzés</div></div><div class="stat"><div class="number">${upcoming.length}</div><div class="label">Közelgő edzés</div><div class="trend">A következő alkalmak</div></div></div><section class="panel"><div class="panel-head"><h2>Közelgő edzések</h2><button class="text-button" data-view="calendar">Naptár megnyitása</button></div>${upcoming.length ? upcoming.map((item) => `<div class="session-row"><div><strong>${escapeHtml(item.workout.date)} · ${escapeHtml(item.workout.time)} · ${escapeHtml(item.workout.type)}</strong><p>${escapeHtml(item.client.name)} · ${item.workout.duration || 0} perc</p></div><button class="text-button" data-client-id="${escapeHtml(item.client.id)}">Kliens megnyitása</button></div>`).join("") : `<div class="empty-state">Nincs közelgő edzés beütemezve.</div>`}</section></div>`;
+  const groupSessions = upcomingGroupWorkouts(trainer).slice(0, 5);
+  return `<div class="topbar"><div><div class="eyebrow">Edzői tér</div><h1>Szia, ${escapeHtml(trainer.name.split(" ")[1] || trainer.name)}.</h1><p>A klienseid és a közelgő edzéseid áttekintése.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="clients">Kliensek</button><button class="btn btn-teal" data-view="calendar">Naptár</button></div></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Hozzád rendelt kliens</div><div class="trend">Aktív kapcsolat</div></div><div class="stat"><div class="number">${sessions}</div><div class="label">Edzés a naplóban</div><div class="trend">Összes rögzített edzés</div></div><div class="stat"><div class="number">${upcoming.length}</div><div class="label">Közelgő edzés</div><div class="trend">A következő alkalmak</div></div><div class="stat"><div class="number">${groupSessions.length}</div><div class="label">Csoportos edzés</div><div class="trend">Meghirdetett közelgő alkalom</div></div></div><section class="panel"><div class="panel-head"><h2>Közelgő edzések</h2><button class="text-button" data-view="calendar">Naptár megnyitása</button></div>${upcoming.length ? upcoming.map((item) => `<div class="session-row"><div><strong>${escapeHtml(item.workout.date)} · ${escapeHtml(item.workout.time)} · ${escapeHtml(item.workout.type)}</strong><p>${escapeHtml(item.client.name)} · ${item.workout.duration || 0} perc</p></div><button class="text-button" data-client-id="${escapeHtml(item.client.id)}">Kliens megnyitása</button></div>`).join("") : `<div class="empty-state">Nincs közelgő edzés beütemezve.</div>`}</section><section class="panel group-dashboard-panel"><div class="panel-head"><div><h2>Közelgő csoportos edzések</h2><p>A meghirdetett alkalmaid és a jelentkezők száma.</p></div><button class="text-button" data-view="calendar">Kezelés a naptárban</button></div>${groupSessions.length ? groupSessions.map((workout) => `<div class="session-row"><div><strong>${escapeHtml(groupWorkoutDateLabel(workout))} · ${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${workout.participantCount}/${workout.capacity} jelentkező · ${workout.duration} perc</p></div><button type="button" class="btn btn-danger" data-group-action="cancel" data-group-id="${escapeHtml(workout.id)}">Lemondás</button></div>`).join("") : `<div class="empty-state">Még nincs meghirdetett csoportos edzés.</div>`}</section></div>`;
 }
 
 function renderTrainerClients(trainer) {
@@ -716,22 +817,69 @@ function renderAdminContent() {
   if (currentView === "coach-profiles") return renderAdminCoachProfiles();
   if (currentView === "coach-profile-review") return renderCoachProfileDetail();
   if (currentView === "client-detail") return renderEnhancedClientDetail(selectedClient());
-  const clients = data.users.filter((user) => user.role === "client");
-  const upcoming = upcomingWorkouts(clients).length;
-  const adherenceClients = clients.map(workoutStats).filter((stats) => stats.due > 0);
-  const averageAdherence = adherenceClients.length ? Math.round(adherenceClients.reduce((sum, stats) => sum + stats.adherence, 0) / adherenceClients.length) : 0;
-  const unread = (data.notifications || []).filter((item) => item.userId === currentUser().id && !item.readAt).length;
-  return `<div class="topbar"><div><div class="eyebrow">Áttekintés</div><h1>A munkaterületed</h1><p>Aktuális kliens- és edzésadatok egy helyen.</p></div><button class="btn btn-teal" id="add-client">${remoteMode ? "Kliens regisztrációja" : "+ Új kliens"}</button></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Összes kliens</div><div class="trend">Nyilvántartott kliensfiók</div></div><div class="stat"><div class="number">${upcoming}</div><div class="label">Közelgő edzés</div><div class="trend">Beütemezve</div></div><div class="stat"><div class="number">${averageAdherence}%</div><div class="label">Átlagos teljesítési arány</div><div class="trend">Esedékes és teljesített edzések alapján</div></div><div class="stat"><div class="number">${unread}</div><div class="label">Olvasatlan értesítés</div><div class="trend"><button class="text-button" data-view="notifications">Értesítések megnyitása</button></div></div></div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Kliens áttekintő</h2><button class="text-button" data-view="clients">Összes megtekintése</button></div>${renderClientTable(clients.slice(0, 4))}</section><section class="panel"><div class="panel-head"><h2>Legutóbbi aktivitás</h2></div>${data.activities.slice(0, 4).map((item) => `<div class="activity"><div class="activity-mark">${escapeHtml(item.mark)}</div><p>${escapeHtml(item.text)}<small>${escapeHtml(item.time)}</small></p></div>`).join("") || `<div class="empty-state">Még nincs aktivitás.</div>`}</section></div>`;
+  return renderAdminOverview();
+}
+
+function renderAdminOverview() {
+  const { records, buckets } = adminPeriodData(adminDashboardPeriod);
+  const completed = records.filter((record) => record.status === "Teljesítve").length;
+  const cancelled = records.filter((record) => record.status === "Lemondva").length;
+  const scheduled = records.filter((record) => record.status === "Beütemezve").length;
+  const completionRate = completed + cancelled ? Math.round((completed / (completed + cancelled)) * 100) : 0;
+  const maxValue = Math.max(1, ...buckets.flatMap((bucket) => [bucket.completed, bucket.cancelled]));
+  const chart = buckets.map((bucket) => `<div class="dashboard-chart-column" aria-label="${escapeHtml(bucket.label)}: ${bucket.completed} teljesített, ${bucket.cancelled} lemondott">
+    <div class="dashboard-chart-bars">
+      <span class="dashboard-chart-bar dashboard-chart-completed" style="height:${bucket.completed ? Math.max(4, (bucket.completed / maxValue) * 100) : 0}%" title="${bucket.completed} teljesített"></span>
+      <span class="dashboard-chart-bar dashboard-chart-cancelled" style="height:${bucket.cancelled ? Math.max(4, (bucket.cancelled / maxValue) * 100) : 0}%" title="${bucket.cancelled} lemondott"></span>
+    </div><span class="dashboard-chart-label">${escapeHtml(bucket.label)}</span>
+  </div>`).join("");
+  const recentWorkouts = adminWorkoutRecords().map((record) => ({
+    title: record.title,
+    date: dateFromInputValue(record.date) ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(dateFromInputValue(record.date)) : record.date,
+    time: record.time,
+    status: record.status,
+    meta: `${record.client.name} · ${trainerName(record.trainerId)}`,
+    sortDate: new Date(record.startsAt).getTime(),
+    mark: initials(record.client.name)
+  }));
+  const latest = [...recentWorkouts, ...(data.groupWorkouts || []).map((workout) => {
+    const date = groupWorkoutDate(workout);
+    return date ? {
+      title: workout.title,
+      date: groupWorkoutDateLabel(workout),
+      time: groupWorkoutTime(workout),
+      status: workout.cancelledAt ? "Lemondva" : date.getTime() <= Date.now() ? "Lezajlott" : "Beütemezve",
+      meta: `Csoportos edzés · ${workout.trainerName || trainerName(workout.trainerId)} · ${workout.participantCount}/${workout.capacity} fő`,
+      sortDate: date.getTime(),
+      mark: "CS"
+    } : null;
+  }).filter(Boolean)].sort((a, b) => b.sortDate - a.sortDate).slice(0, 8);
+  const periodLabels = { week: "Heti", month: "Havi", year: "Éves" };
+  const chartDescription = buckets.map((bucket) => `${bucket.label}: ${bucket.completed} teljesített, ${bucket.cancelled} lemondott`).join("; ");
+  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Dashboard</div><h1>Áttekintés</h1><p>A nyilvántartott edzések és a legutóbbi alkalmak összesítése.</p></div><div class="dashboard-period-switch" role="group" aria-label="Dashboard időszak">${Object.entries(periodLabels).map(([period, label]) => `<button type="button" class="btn ${adminDashboardPeriod === period ? "btn-dark" : "btn-ghost"}" data-admin-period="${period}" aria-pressed="${adminDashboardPeriod === period}">${label}</button>`).join("")}</div></div>
+    <div class="stat-grid dashboard-stats"><div class="stat"><div class="number">${records.length}</div><div class="label">${periodLabels[adminDashboardPeriod]} egyéni edzés</div><div class="trend">Minden státusz</div></div><div class="stat"><div class="number">${completed}</div><div class="label">Teljesített</div><div class="trend">A kiválasztott időszakban</div></div><div class="stat"><div class="number">${cancelled}</div><div class="label">Lemondott</div><div class="trend">A kiválasztott időszakban</div></div><div class="stat"><div class="number">${completionRate}%</div><div class="label">Teljesítési arány</div><div class="trend">${scheduled} beütemezve, a jövőbelieket is számítva</div></div></div>
+    <div class="content-grid dashboard-content-grid"><section class="panel dashboard-chart-panel"><div class="panel-head"><div><h2>Edzésstatisztika</h2><p>${periodLabels[adminDashboardPeriod]} bontás · egyéni, teljesített és lemondott edzések</p></div></div><div class="dashboard-chart-legend"><span><i class="dashboard-chart-completed"></i>Teljesített</span><span><i class="dashboard-chart-cancelled"></i>Lemondott</span></div><div class="dashboard-chart" role="img" aria-label="Egyéni edzések ${periodLabels[adminDashboardPeriod].toLowerCase()} bontásban: ${escapeHtml(chartDescription)}">${chart}</div></section>
+    <section class="panel dashboard-recent-panel"><div class="panel-head"><div><h2>Legutóbbi edzések</h2><p>Egyéni és csoportos alkalmak</p></div><button class="text-button" data-view="calendar">Naptár</button></div>${latest.length ? latest.map((item) => `<div class="activity"><div class="activity-mark">${escapeHtml(item.mark)}</div><p><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.date)} · ${escapeHtml(item.time)} · ${escapeHtml(item.meta)}</small></p><span class="status ${item.status === "Teljesítve" || item.status === "Megtartva" ? "status-active" : item.status === "Lemondva" ? "status-cancelled" : "status-paused"}">${escapeHtml(item.status)}</span></div>`).join("") : `<div class="empty-state">Még nincs rögzített edzés.</div>`}</section></div>`;
 }
 
 function renderCalendar(user) {
   const clients = calendarClientsFor(user);
-  const events = clients.flatMap((client) => (client.workouts || []).map((workout, index) => ({
+  const individualEvents = clients.flatMap((client) => (client.workouts || []).map((workout, index) => ({
+    kind: "individual",
     client,
     workout,
     index,
     date: workoutDateToInputValue(workout.date)
-  }))).filter((event) => event.date).sort((a, b) => a.date.localeCompare(b.date) || (a.workout.time || "").localeCompare(b.workout.time || ""));
+  }))).filter((event) => event.date);
+  const groupEvents = visibleGroupWorkouts(user).map((workout) => ({
+    kind: "group",
+    workout,
+    date: groupWorkoutDate(workout) ? toDateInputValue(groupWorkoutDate(workout)) : ""
+  })).filter((event) => event.date);
+  const events = [...individualEvents, ...groupEvents].sort((a, b) =>
+    a.date.localeCompare(b.date)
+      || (a.kind === "group" ? groupWorkoutTime(a.workout) : a.workout.time || "").localeCompare(b.kind === "group" ? groupWorkoutTime(b.workout) : b.workout.time || "")
+  );
   const selectedDate = dateFromInputValue(calendarSelectedDate) ? calendarSelectedDate : toDateInputValue(new Date());
   calendarSelectedDate = selectedDate;
   const firstDay = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), 1);
@@ -746,14 +894,42 @@ function renderCalendar(user) {
     const dateValue = toDateInputValue(date);
     const dayEvents = events.filter((event) => event.date === dateValue);
     const outsideMonth = date.getMonth() !== calendarMonth.getMonth();
-    return `<article class="calendar-day ${outsideMonth ? "calendar-day-outside" : ""} ${dateValue === selectedDate ? "calendar-day-selected" : ""}"><button type="button" class="calendar-date" data-calendar-date="${dateValue}" aria-pressed="${dateValue === selectedDate}">${date.getDate()}</button><div class="calendar-events">${dayEvents.slice(0, 2).map((event) => user.role === "client"
-      ? `<span class="calendar-event" title="${escapeHtml(event.workout.type)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</span>`
-      : `<button type="button" class="calendar-event" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}" title="${escapeHtml(event.workout.type)} · ${escapeHtml(event.client.name)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</button>`).join("")}${dayEvents.length > 2 ? `<span class="calendar-more">+${dayEvents.length - 2} további</span>` : ""}</div></article>`;
+    return `<article class="calendar-day ${outsideMonth ? "calendar-day-outside" : ""} ${dateValue === selectedDate ? "calendar-day-selected" : ""}"><button type="button" class="calendar-date" data-calendar-date="${dateValue}" aria-pressed="${dateValue === selectedDate}">${date.getDate()}</button><div class="calendar-events">${dayEvents.slice(0, 2).map((event) => event.kind === "group"
+      ? `<button type="button" class="calendar-event calendar-group-event" data-calendar-date="${dateValue}" title="Csoportos edzés · ${escapeHtml(event.workout.title)}">${escapeHtml(groupWorkoutTime(event.workout))} ${escapeHtml(event.workout.title)}</button>`
+      : user.role === "client"
+        ? `<span class="calendar-event" title="${escapeHtml(event.workout.type)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</span>`
+        : `<button type="button" class="calendar-event" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}" title="${escapeHtml(event.workout.type)} · ${escapeHtml(event.client.name)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</button>`).join("")}${dayEvents.length > 2 ? `<span class="calendar-more">+${dayEvents.length - 2} további</span>` : ""}</div></article>`;
   }).join("");
   const selectedEvents = events.filter((event) => event.date === selectedDate);
   const selectedLabel = new Intl.DateTimeFormat("hu-HU", { dateStyle: "full" }).format(dateFromInputValue(selectedDate));
-  const selectedEventRows = selectedEvents.map((event) => `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`).join("");
-  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Naptár</div><h1>Edzésnaptár</h1><p>${user.role === "client" ? "A saját edzéseid áttekintése." : "A kliensek edzései és időpontjai egy helyen."}</p></div><button type="button" class="btn btn-teal" id="calendar-add-workout">${user.role === "client" ? "+ Egyéni edzés" : "+ Új edzés"}</button></div><section class="panel calendar-panel"><div class="calendar-toolbar"><button type="button" class="btn btn-ghost" id="calendar-previous" aria-label="Előző hónap">←</button><h2>${escapeHtml(monthTitle)}</h2><button type="button" class="btn btn-ghost" id="calendar-next" aria-label="Következő hónap">→</button><button type="button" class="text-button" id="calendar-today">Ma</button></div><div class="calendar-grid calendar-weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div><div class="calendar-grid">${days}</div></section><section class="panel calendar-agenda"><div class="panel-head"><div><h2>${escapeHtml(selectedLabel)}</h2><p>A kiválasztott nap edzései</p></div><span class="eyebrow" style="margin:0">${selectedEvents.length} edzés</span></div>${selectedEventRows || `<div class="empty-state">Erre a napra nincs edzés beütemezve.</div>`}</section>`;
+  const selectedEventRows = selectedEvents.map((event) => {
+    if (event.kind === "individual") {
+      return `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : event.workout.status === "Lemondva" ? "cancelled" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`;
+    }
+    const workout = event.workout;
+    const startsAt = groupWorkoutDate(workout);
+    const isFuture = startsAt && startsAt.getTime() > Date.now();
+    const isTrainerOwner = user.role === "trainer" && workout.trainerId === user.id;
+    const isClient = user.role === "client";
+    const isRegistered = Boolean(workout.isRegistered || workout.registrations?.includes(user.id));
+    const hasCapacity = Number(workout.participantCount || 0) < Number(workout.capacity || 0);
+    const action = isClient && !workout.cancelledAt && isFuture
+      ? isRegistered
+        ? `<button type="button" class="btn btn-ghost" data-group-action="leave" data-group-id="${escapeHtml(workout.id)}">Leiratkozás</button>`
+        : hasCapacity
+          ? `<button type="button" class="btn btn-teal" data-group-action="join" data-group-id="${escapeHtml(workout.id)}">Jelentkezés</button>`
+          : `<span class="status status-paused">Betelt</span>`
+      : isTrainerOwner && !workout.cancelledAt
+        ? `<button type="button" class="btn btn-danger" data-group-action="cancel" data-group-id="${escapeHtml(workout.id)}">Edzés lemondása</button>`
+        : "";
+    const status = workout.cancelledAt ? "Lemondva" : !isFuture ? "Megtartva" : isRegistered ? "Jelentkeztél" : hasCapacity ? "Jelentkezhető" : "Betelt";
+    return `<div class="session-row group-session-row"><div><strong>${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${escapeHtml(workout.trainerName || trainerName(workout.trainerId))} · ${workout.duration} perc · ${workout.participantCount}/${workout.capacity} fő</p>${workout.description ? `<p>${escapeHtml(workout.description)}</p>` : ""}</div><span class="status status-${workout.cancelledAt ? "cancelled" : isRegistered || status === "Megtartva" ? "active" : "paused"}">${status}</span>${action}</div>`;
+  }).join("");
+  const addButtons = user.role === "client"
+    ? `<button type="button" class="btn btn-teal" id="calendar-add-workout">+ Egyéni edzés</button>`
+    : `${user.role === "trainer" ? `<button type="button" class="btn btn-teal" id="calendar-add-group-workout">+ Csoportos edzés</button>` : ""}<button type="button" class="btn btn-teal" id="calendar-add-workout">+ Egyéni edzés</button>`;
+  const description = user.role === "client" ? "A saját és a kapcsolt edzők csoportos edzései." : user.role === "trainer" ? "A klienseid egyéni edzései és saját csoportos alkalmaid." : "A kliensek egyéni edzései és a csoportos alkalmak.";
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Naptár</div><h1>Edzésnaptár</h1><p>${description}</p></div><div class="topbar-actions">${addButtons}</div></div><section class="panel calendar-panel"><div class="calendar-toolbar"><button type="button" class="btn btn-ghost" id="calendar-previous" aria-label="Előző hónap">←</button><h2>${escapeHtml(monthTitle)}</h2><button type="button" class="btn btn-ghost" id="calendar-next" aria-label="Következő hónap">→</button><button type="button" class="text-button" id="calendar-today">Ma</button></div><div class="calendar-grid calendar-weekdays">${weekdays.map((day) => `<div>${day}</div>`).join("")}</div><div class="calendar-grid">${days}</div></section><section class="panel calendar-agenda"><div class="panel-head"><div><h2>${escapeHtml(selectedLabel)}</h2><p>A kiválasztott nap edzései</p></div><span class="eyebrow" style="margin:0">${selectedEvents.length} edzés</span></div>${selectedEventRows || `<div class="empty-state">Erre a napra nincs edzés beütemezve.</div>`}</section>`;
 }
 
 function calendarClientsFor(user) {
@@ -775,6 +951,14 @@ function openCalendarWorkout() {
     return;
   }
   openModal(`<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Naptár / Új edzés</div><h2>Kliens kiválasztása</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="calendar-workout-client-form" data-date="${date}"><div class="field"><label for="calendar-workout-client">Kliens</label><select id="calendar-workout-client" name="clientId" required>${clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name)}</option>`).join("")}</select></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Tovább</button></div></form></div></div>`);
+}
+
+function renderGroupWorkoutModal() {
+  const date = dateFromInputValue(calendarSelectedDate) ? calendarSelectedDate : toDateInputValue(new Date());
+  const defaultStart = new Date(`${date}T09:00`);
+  const localStart = new Date(Math.max(defaultStart.getTime(), Date.now() + 60 * 60 * 1000));
+  const startsAt = `${toDateInputValue(localStart)}T${String(localStart.getHours()).padStart(2, "0")}:${String(localStart.getMinutes()).padStart(2, "0")}`;
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Naptár / Csoportos edzés</div><h2>Új csoportos edzés</h2></div><button type="button" class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="group-workout-form"><div class="field"><label for="group-title">Edzés neve</label><input id="group-title" name="title" maxlength="120" required /></div><div class="field"><label for="group-description">Leírás</label><textarea id="group-description" name="description" maxlength="2000"></textarea></div><div class="form-grid"><div class="field span-2"><label for="group-starts-at">Kezdés</label><input id="group-starts-at" name="startsAt" type="datetime-local" min="${toDateInputValue(new Date())}T${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}" value="${startsAt}" required /></div><div class="field"><label for="group-duration">Időtartam (perc)</label><input id="group-duration" name="duration" type="number" min="1" max="480" value="60" required /></div><div class="field"><label for="group-capacity">Férőhelyek</label><input id="group-capacity" name="capacity" type="number" min="2" max="100" value="8" required /></div></div><p class="settings-help">A csoportos edzést csak a hozzád kapcsolt kliensek látják és látogathatják.</p><div class="modal-actions"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edzés meghirdetése</button></div></form></div></div>`;
 }
 
 function renderTrainers() {
@@ -839,6 +1023,52 @@ function openModal(client = {}) { document.body.insertAdjacentHTML("beforeend", 
 function bindModalEvents() {
   document.querySelector("#close-modal")?.addEventListener("click", () => document.querySelector("#modal-backdrop").remove());
   document.querySelector("#cancel-modal")?.addEventListener("click", () => document.querySelector("#modal-backdrop").remove());
+  document.querySelector("#group-workout-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const values = Object.fromEntries(new FormData(form).entries());
+    const startsAt = new Date(values.startsAt);
+    if (Number.isNaN(startsAt.getTime()) || startsAt.getTime() <= Date.now()) {
+      toast("A csoportos edzés kezdése jövőbeli időpont legyen.");
+      return;
+    }
+    const workout = {
+      title: values.title.trim(),
+      description: values.description.trim(),
+      startsAt: startsAt.toISOString(),
+      duration: Number(values.duration),
+      capacity: Number(values.capacity)
+    };
+    const submit = form.querySelector('button[type="submit"], button:not([type])');
+    if (submit) submit.disabled = true;
+    try {
+      if (remoteMode) {
+        await window.remoteStore.createGroupWorkout(workout);
+        document.querySelector("#modal-backdrop")?.remove();
+        await refreshRemote();
+      } else {
+        const trainer = currentUser();
+        data.groupWorkouts ||= [];
+        data.groupWorkouts.push({
+          ...workout,
+          id: `group-${Date.now()}`,
+          trainerId: trainer.id,
+          trainerName: trainer.name,
+          participantCount: 0,
+          isRegistered: false,
+          registrations: [],
+          cancelledAt: null
+        });
+        saveData();
+        document.querySelector("#modal-backdrop")?.remove();
+        render();
+      }
+      toast("A csoportos edzés meghirdetve.");
+    } catch (error) {
+      if (submit) submit.disabled = false;
+      toast(`Nem sikerült meghirdetni a csoportos edzést: ${error.message}`);
+    }
+  });
   document.querySelector("#client-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     const formData = new FormData(event.currentTarget); const id = event.currentTarget.dataset.id;
@@ -1016,6 +1246,57 @@ function bindEvents() {
     navigateToView(button.dataset.view);
     if (button.dataset.view === "administrators") void loadAdminAccounts();
   }));
+  document.querySelectorAll("[data-admin-period]").forEach((button) => button.addEventListener("click", () => {
+    adminDashboardPeriod = button.dataset.adminPeriod;
+    render();
+  }));
+  document.querySelectorAll("[data-group-action]").forEach((button) => button.addEventListener("click", async () => {
+    const { groupId, groupAction } = button.dataset;
+    const workout = (data.groupWorkouts || []).find((item) => item.id === groupId);
+    const user = currentUser();
+    if (!workout || !user) return toast("Ez a csoportos edzés már nem érhető el.");
+    if (groupAction === "cancel" && !confirm("Biztosan lemondod ezt a csoportos edzést?")) return;
+    button.disabled = true;
+    try {
+      if (remoteMode) {
+        if (groupAction === "join") await window.remoteStore.joinGroupWorkout(groupId);
+        else if (groupAction === "leave") await window.remoteStore.leaveGroupWorkout(groupId);
+        else if (groupAction === "cancel") await window.remoteStore.cancelGroupWorkout(groupId);
+        else throw new Error("Ismeretlen művelet.");
+        await refreshRemote();
+      } else if (groupAction === "join") {
+        if (user.role !== "client" || !(user.trainerIds || []).includes(workout.trainerId)) throw new Error("Csak az edzőhöz kapcsolt kliensek jelentkezhetnek.");
+        if (workout.cancelledAt || groupWorkoutDate(workout)?.getTime() <= Date.now()) throw new Error("A csoportos edzés már nem jelentkezhető.");
+        workout.registrations ||= [];
+        if (!workout.registrations.includes(user.id)) {
+          if (workout.registrations.length >= workout.capacity) throw new Error("A csoportos edzés betelt.");
+          workout.registrations.push(user.id);
+        }
+        workout.participantCount = workout.registrations.length;
+        workout.isRegistered = true;
+        saveData();
+        render();
+      } else if (groupAction === "leave") {
+        if (user.role !== "client" || groupWorkoutDate(workout)?.getTime() <= Date.now()) throw new Error("A kezdés után már nem lehet leiratkozni.");
+        workout.registrations = (workout.registrations || []).filter((id) => id !== user.id);
+        workout.participantCount = workout.registrations.length;
+        workout.isRegistered = false;
+        saveData();
+        render();
+      } else if (groupAction === "cancel") {
+        if (user.role !== "trainer" || workout.trainerId !== user.id) throw new Error("Csak a saját csoportos edzésedet mondhatod le.");
+        workout.cancelledAt = new Date().toISOString();
+        saveData();
+        render();
+      } else {
+        throw new Error("Ismeretlen művelet.");
+      }
+      toast(groupAction === "join" ? "Jelentkeztél a csoportos edzésre." : groupAction === "leave" ? "Leiratkoztál a csoportos edzésről." : "A csoportos edzés lemondva.");
+    } catch (error) {
+      button.disabled = false;
+      toast(`Nem sikerült végrehajtani a műveletet: ${error.message}`);
+    }
+  }));
   document.querySelectorAll("[data-grant-admin]").forEach((button) => button.addEventListener("click", () => grantAdminRole(button.dataset.grantAdmin)));
   document.querySelectorAll("[data-trainer-application]").forEach((button) => button.addEventListener("click", async () => {
     const userId = button.dataset.userId;
@@ -1061,6 +1342,7 @@ function bindEvents() {
     render();
   }));
   document.querySelector("#calendar-add-workout")?.addEventListener("click", openCalendarWorkout);
+  document.querySelector("#calendar-add-group-workout")?.addEventListener("click", () => openModal(renderGroupWorkoutModal()));
   document.querySelectorAll("[data-calendar-workout-client]").forEach((button) => button.addEventListener("click", () => {
     const client = calendarClientsFor(currentUser()).find((item) => item.id === button.dataset.calendarWorkoutClient);
     const index = Number(button.dataset.calendarWorkoutIndex);
@@ -1259,7 +1541,18 @@ function openRegistration() {
 function renderClientContent(user) {
   const workouts = user.workouts || [];
   const stats = workoutStats(user);
-  return `<div class="topbar"><div><div class="eyebrow">Kezdőlap</div><h1>Szia, ${escapeHtml(user.name.split(" ")[0])}.</h1><p>A következetesség a munka. Folytasd.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="calendar">Edzésnaptár</button><button class="btn btn-teal" id="add-workout">+ Egyéni edzés</button></div></div><div class="detail-layout"><section class="panel profile-card"><div class="profile-avatar">${initials(user.name)}</div><h2>${escapeHtml(user.name)}</h2><p>${escapeHtml(user.email)}</p><span class="status status-${user.status === "Aktív" ? "active" : "paused"}">${escapeHtml(user.status || "Aktív")}</span><div class="profile-meta"><div class="meta-row"><span>Fókusz</span><strong>${escapeHtml(user.goal || "Nincs beállítva")}</strong></div><div class="meta-row"><span>Edzők</span><strong>${(user.trainerIds || []).map((id) => escapeHtml(trainerName(id))).join(", ") || "Nincs hozzárendelve"}</strong></div><div class="meta-row"><span>Következő edzés</span><strong>${escapeHtml(nextSessionLabel(user))}</strong></div></div></section><section class="panel"><div class="panel-head"><h2>Edzésstatisztika</h2><span class="eyebrow" style="margin:0">Összesített</span></div><div class="metric-grid"><div class="metric"><strong>${stats.completed}</strong><span>Teljesített edzés</span></div><div class="metric"><strong>${stats.upcoming}</strong><span>Közelgő edzés</span></div><div class="metric"><strong>${stats.adherence}%</strong><span>Teljesítési arány</span></div></div><h3>Esedékes edzések teljesítése</h3><div class="progress-bar" role="progressbar" aria-label="Esedékes edzések teljesítése" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${stats.adherence}"><span style="width:${stats.adherence}%"></span></div><p class="settings-help">${stats.completed} teljesített a ${stats.due} esedékes vagy teljesített, nem lemondott edzésből. A jövőbeli edzéseket még nem számítjuk bele.</p><div class="panel-head" style="margin-top:28px"><h2>Edzésnapló</h2></div>${workouts.length ? workouts.map((workout) => `<div class="session-row"><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(trainerName(workout.trainerId))}</p></div><span class="status status-${workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(workout.status)}</span></div>`).join("") : `<div class="empty-state">Még nincs rögzített edzés.</div>`}<div class="panel" style="background:var(--mint);border:0;margin-top:20px"><h3>Edzői megjegyzés</h3><p style="font-size:.84rem;line-height:1.55;margin-bottom:0">${escapeHtml(user.notes || "Tartsd a fókuszt és figyelj a mozgásminőségre.")}</p></div></section></div>`;
+  const groupSessions = upcomingGroupWorkouts(user).slice(0, 5);
+  return `<div class="topbar"><div><div class="eyebrow">Kezdőlap</div><h1>Szia, ${escapeHtml(user.name.split(" ")[0])}.</h1><p>A következetesség a munka. Folytasd.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="calendar">Edzésnaptár</button><button class="btn btn-teal" id="add-workout">+ Egyéni edzés</button></div></div><div class="detail-layout"><section class="panel profile-card"><div class="profile-avatar">${initials(user.name)}</div><h2>${escapeHtml(user.name)}</h2><p>${escapeHtml(user.email)}</p><span class="status status-${user.status === "Aktív" ? "active" : "paused"}">${escapeHtml(user.status || "Aktív")}</span><div class="profile-meta"><div class="meta-row"><span>Fókusz</span><strong>${escapeHtml(user.goal || "Nincs beállítva")}</strong></div><div class="meta-row"><span>Edzők</span><strong>${(user.trainerIds || []).map((id) => escapeHtml(trainerName(id))).join(", ") || "Nincs hozzárendelve"}</strong></div><div class="meta-row"><span>Következő edzés</span><strong>${escapeHtml(nextSessionLabel(user))}</strong></div></div></section><section class="panel"><div class="panel-head"><h2>Edzésstatisztika</h2><span class="eyebrow" style="margin:0">Összesített</span></div><div class="metric-grid"><div class="metric"><strong>${stats.completed}</strong><span>Teljesített edzés</span></div><div class="metric"><strong>${stats.upcoming}</strong><span>Közelgő edzés</span></div><div class="metric"><strong>${stats.adherence}%</strong><span>Teljesítési arány</span></div></div><h3>Esedékes edzések teljesítése</h3><div class="progress-bar" role="progressbar" aria-label="Esedékes edzések teljesítése" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${stats.adherence}"><span style="width:${stats.adherence}%"></span></div><p class="settings-help">${stats.completed} teljesített a ${stats.due} esedékes vagy teljesített, nem lemondott edzésből. A jövőbeli edzéseket még nem számítjuk bele.</p><div class="panel-head" style="margin-top:28px"><h2>Edzésnapló</h2></div>${workouts.length ? workouts.map((workout) => `<div class="session-row"><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(trainerName(workout.trainerId))}</p></div><span class="status status-${workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(workout.status)}</span></div>`).join("") : `<div class="empty-state">Még nincs rögzített edzés.</div>`}<div class="panel" style="background:var(--mint);border:0;margin-top:20px"><h3>Edzői megjegyzés</h3><p style="font-size:.84rem;line-height:1.55;margin-bottom:0">${escapeHtml(user.notes || "Tartsd a fókuszt és figyelj a mozgásminőségre.")}</p></div></section></div><section class="panel group-dashboard-panel"><div class="panel-head"><div><h2>Csoportos edzések</h2><p>A hozzád rendelt edzők nyitott alkalmai.</p></div><button class="text-button" data-view="calendar">Naptár megnyitása</button></div>${groupSessions.length ? groupSessions.map((workout) => {
+    const registered = Boolean(workout.isRegistered || workout.registrations?.includes(user.id));
+    const available = workout.participantCount < workout.capacity;
+    const action = registered
+      ? `<button type="button" class="btn btn-ghost" data-group-action="leave" data-group-id="${escapeHtml(workout.id)}">Leiratkozás</button>`
+      : available
+        ? `<button type="button" class="btn btn-teal" data-group-action="join" data-group-id="${escapeHtml(workout.id)}">Jelentkezés</button>`
+        : `<span class="status status-paused">Betelt</span>`;
+    const status = registered ? "Jelentkeztél" : available ? "Jelentkezhető" : "Betelt";
+    return `<div class="session-row"><div><strong>${escapeHtml(groupWorkoutDateLabel(workout))} · ${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${escapeHtml(workout.trainerName || trainerName(workout.trainerId))} · ${workout.participantCount}/${workout.capacity} fő · ${workout.duration} perc</p>${workout.description ? `<p>${escapeHtml(workout.description)}</p>` : ""}</div><span class="status ${registered ? "status-active" : "status-paused"}">${status}</span>${action}</div>`;
+  }).join("") : `<div class="empty-state">Jelenleg nincs közelgő csoportos edzés a kapcsolt edzőidtől.</div>`}</section>`;
 }
 
 restoreRouteFromUrl();

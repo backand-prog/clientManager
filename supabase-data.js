@@ -16,6 +16,22 @@
     };
   }
 
+  function mapGroupWorkout(workout) {
+    return {
+      id: workout.id,
+      trainerId: workout.trainer_id,
+      trainerName: workout.trainer_name,
+      title: workout.title,
+      description: workout.description || "",
+      startsAt: workout.starts_at,
+      duration: workout.duration_minutes,
+      capacity: workout.capacity,
+      participantCount: Number(workout.participant_count) || 0,
+      isRegistered: Boolean(workout.is_registered),
+      cancelledAt: workout.cancelled_at
+    };
+  }
+
   async function load() {
     if (!enabled) return null;
     const { data: authData, error } = await client.auth.getUser();
@@ -23,13 +39,14 @@
     if (error) throw error;
     const user = authData?.user;
     if (!user) return null;
-    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult] = await Promise.all([
       client.from("profiles").select("*").order("created_at"),
       client.from("client_trainers").select("client_id, trainer_id"),
       client.from("workouts").select("*").order("workout_date", { ascending: false }),
       client.from("connection_requests").select("*").order("created_at", { ascending: false }),
       client.from("connection_notifications").select("*").order("created_at", { ascending: false }).limit(30),
-      client.from("coach_public_profiles").select("*").order("updated_at", { ascending: false })
+      client.from("coach_public_profiles").select("*").order("updated_at", { ascending: false }),
+      client.rpc("get_group_workouts")
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
@@ -37,6 +54,7 @@
     if (requestsResult.error) throw requestsResult.error;
     if (notificationsResult.error) throw notificationsResult.error;
     if (coachProfilesResult.error) throw coachProfilesResult.error;
+    if (groupWorkoutsResult.error) throw groupWorkoutsResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
     const profiles = profilesResult.data || [];
@@ -80,6 +98,7 @@
         };
       }),
       activities: [],
+      groupWorkouts: (groupWorkoutsResult.data || []).map(mapGroupWorkout),
       trainerApplications,
       connectionRequests: (requestsResult.data || []).map((request) => ({
         id: request.id,
@@ -191,6 +210,36 @@
     if (result.error) throw result.error;
   }
 
+  async function createGroupWorkout(workout) {
+    if (!enabled) return;
+    const result = await client.rpc("create_group_workout", {
+      workout_title: workout.title,
+      workout_description: workout.description || "",
+      workout_starts_at: workout.startsAt,
+      workout_duration_minutes: workout.duration,
+      workout_capacity: workout.capacity
+    });
+    if (result.error) throw result.error;
+  }
+
+  async function joinGroupWorkout(workoutId) {
+    if (!enabled) return;
+    const result = await client.rpc("join_group_workout", { workout_id: workoutId });
+    if (result.error) throw result.error;
+  }
+
+  async function leaveGroupWorkout(workoutId) {
+    if (!enabled) return;
+    const result = await client.rpc("leave_group_workout", { workout_id: workoutId });
+    if (result.error) throw result.error;
+  }
+
+  async function cancelGroupWorkout(workoutId) {
+    if (!enabled) return;
+    const result = await client.rpc("cancel_group_workout", { workout_id: workoutId });
+    if (result.error) throw result.error;
+  }
+
   async function createConnectionRequest(email) {
     if (!enabled) return;
     const result = await client.rpc("create_connection_request", { target_email: email });
@@ -278,5 +327,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

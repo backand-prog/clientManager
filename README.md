@@ -13,6 +13,8 @@ Első verziós klienskezelő személyi edzők számára.
 - Edzések hozzáadása és szerkesztése dátummal, időponttal, időtartammal, státusszal és edzővel
 - A következő edzés automatikusan a legkorábbi jövőbeli, beütemezett alkalomból jelenik meg
 - Havi edzésnaptár napválasztással; az adminisztrátorok és edzők a kliensekhez ütemezhetnek, a kliensek a saját edzéseiket tekinthetik át
+- Admin dashboard heti, havi és éves edzésstatisztikával, teljesített/lemondott edzések grafikonjával és legutóbbi edzésekkel
+- Edző által meghirdethető, férőhelykorlátos csoportos edzések; a kapcsolt kliensek a naptárból vagy a kezdőlapról jelentkezhetnek, illetve a kezdésig leiratkozhatnak
 - Egyéni, edző nélküli edzések naplózása
 - Kliens saját profil- és fejlődésnézete; nyilvános, 18+ kliensregisztráció
 - Edzői jelentkezés e-mail-megerősítéssel, adminisztrátori elbírálással és jóváhagyásig korlátozott hozzáféréssel
@@ -34,7 +36,7 @@ A projekt Supabase PostgreSQL adatbázist és Supabase Auth hitelesítést haszn
 Beállítás:
 
 1. Hozz létre egy Supabase projektet.
-2. Futtasd le a `supabase-schema.sql` fájlt a Supabase SQL Editorban. Meglévő projekt frissítésekor is futtasd le újra, hogy létrejöjjenek a kapcsolódási és coach profil táblák, az ellenőrzött adatbázis-műveletek és a privát képtároló.
+2. Futtasd le a `supabase-schema.sql` fájlt a Supabase SQL Editorban. Meglévő projekt frissítésekor is futtasd le újra; ez létrehozza a kapcsolódási, coach profil és csoportos edzés táblákat, az ellenőrzött adatbázis-műveleteket és a privát képtárolót. A csoportos edzéseket használó frontend kiadása előtt a sémát előbb alkalmazd az adatbázisra.
 3. Másold a `supabase-config.example.js` fájlt `supabase-config.js` néven.
 4. Írd be a Supabase projekt URL-jét és anon kulcsát a konfigurációba.
 5. A Supabase Dashboardban az Authentication beállításainál kapcsold be a **Confirm email** opciót.
@@ -69,7 +71,7 @@ Az alkalmazás Vercelre GitHub-projektként telepíthető. A build a böngésző
 1. Importáld a GitHub-repozitóriumot Vercelbe, a projekt gyökere maradjon a repository gyökere, a framework pedig **Other**.
 2. A Vercel **Settings → Environment Variables** részében add meg a `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékeket a staging Supabase-projekt publikus URL-jével és anon/publishable kulcsával, legalább a **Preview** és **Production** környezetre.
 3. Ellenőrizd a **Build and Output Settings** részen, hogy a build parancs `node scripts/build-static.mjs`, a kimeneti könyvtár pedig `dist`.
-4. Futtasd le a frissített `supabase-schema.sql` sémát a staging Supabase-projekt SQL Editorában, és telepítsd az Edge Functiont: `supabase functions deploy account-admin`.
+4. Futtasd le a frissített `supabase-schema.sql` sémát a staging Supabase-projekt SQL Editorában, mielőtt a csoportos edzést használó frontend build kikerül; telepítsd az Edge Functiont is: `supabase functions deploy account-admin`.
 5. A Vercel által kiosztott domain gyökerét add hozzá a staging projekt Supabase Authentication URL Configuration beállításának **Site URL** és **Redirect URLs** listájához.
 6. Deploy után ellenőrizd az e-mail-megerősítést, kliensregisztrációt, edzői jelentkezést és adminisztrátori jóváhagyást a staging környezetben.
 
