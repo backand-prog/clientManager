@@ -1,5 +1,19 @@
 const STORAGE_KEY = "form-function-data";
 const SESSION_KEY = "form-function-session";
+const EXERCISE_CATALOG = [
+  "Guggolás", "Serleg guggolás", "Elölguggolás", "Hátsó guggolás", "Bolgár guggolás",
+  "Kitörés előre", "Kitörés hátra", "Sétáló kitörés", "Lábtoló", "Lábnyújtás gépen",
+  "Lábhajlítás gépen", "Román felhúzás", "Felhúzás", "Csípőemelés", "Hip thrust",
+  "Vádliemelés", "Fekvenyomás", "Fekvenyomás kézisúlyzóval", "Ferdepados nyomás",
+  "Fekvőtámasz", "Fekvőtámasz emelt kézzel", "Vállból nyomás", "Arnold-nyomás",
+  "Oldalemelés", "Előreemelés", "Evezés rúddal", "Evezés kézisúlyzóval",
+  "Evezés csigán", "Lehúzás mellhez", "Húzódzkodás", "Bicepsz hajlítás",
+  "Kalapács bicepsz", "Tricepsz letolás csigán", "Tricepsznyújtás fej fölött",
+  "Plank", "Oldalsó plank", "Dead bug", "Bird dog", "Hasprés", "Lábemelés",
+  "Russian twist", "Pallof press", "Farmer séta", "Kettlebell lendítés",
+  "Burpee", "Ugró guggolás", "Helyben futás", "Kerékpározás", "Evezőpad",
+  "Futópad", "Csípőmobilizálás", "Macska-tehén", "Mellkasnyitás", "Bokamobilizálás"
+];
 
 const seedData = {
   users: [
@@ -11,6 +25,37 @@ const seedData = {
   ],
   connectionRequests: [],
   notifications: [],
+  trainingPlans: [
+    {
+      id: "plan-public-starter",
+      trainerId: "trainer-1",
+      trainerName: "Nagy Anna",
+      title: "Teljes testes alapozó",
+      description: "Háromnapos, fokozatos erőnléti alapprogram.",
+      isPublic: true,
+      clientIds: [],
+      updatedAt: "2026-03-20T08:00:00.000Z",
+      days: [
+        { id: "plan-public-starter-day-1", title: "A nap · Alsótest és törzs", notes: "Kontrollált tempóval dolgozz.", exercises: [{ name: "Serleg guggolás", sets: 3, reps: "8–10", restSeconds: 90, notes: "" }, { name: "Román felhúzás kézisúlyzóval", sets: 3, reps: "10", restSeconds: 90, notes: "" }] },
+        { id: "plan-public-starter-day-2", title: "B nap · Felsőtest", notes: "", exercises: [{ name: "Fekvenyomás kézisúlyzóval", sets: 3, reps: "8–12", restSeconds: 90, notes: "" }, { name: "Evezés csigán", sets: 3, reps: "10–12", restSeconds: 60, notes: "" }] },
+        { id: "plan-public-starter-day-3", title: "C nap · Teljes test", notes: "Hagyj legalább egy pihenőnapot az alkalmak között.", exercises: [{ name: "Kitörés hátra", sets: 3, reps: "8 / oldal", restSeconds: 90, notes: "" }, { name: "Plank", sets: 3, reps: "30–45 mp", restSeconds: 60, notes: "" }] }
+      ]
+    },
+    {
+      id: "plan-maya-strength",
+      trainerId: "trainer-1",
+      trainerName: "Nagy Anna",
+      title: "Maya · Erő és mobilitás",
+      description: "Személyre szabott, két alkalmas kezdőprogram.",
+      isPublic: false,
+      clientIds: ["client-1"],
+      updatedAt: "2026-03-19T08:00:00.000Z",
+      days: [
+        { id: "plan-maya-strength-day-1", title: "1. alkalom · Alaperő", notes: "", exercises: [{ name: "Serleg guggolás", sets: 3, reps: "8", restSeconds: 90, notes: "Kényelmes mozgástartományban." }, { name: "Fekvőtámasz emelt kézzel", sets: 3, reps: "8–10", restSeconds: 60, notes: "" }] },
+        { id: "plan-maya-strength-day-2", title: "2. alkalom · Mobilitás és törzs", notes: "", exercises: [{ name: "Dead bug", sets: 3, reps: "8 / oldal", restSeconds: 45, notes: "" }, { name: "Csípőmobilizálás", sets: 2, reps: "8 / oldal", restSeconds: 30, notes: "Lassú, kontrollált mozgás." }] }
+      ]
+    }
+  ],
   coachProfiles: [{ id: "trainer-1", name: "Nagy Anna", specialty: "Erőnléti edzés", bio: "Személyre szabott erőnléti edzéssel segítek, hogy magabiztosan és fenntarthatóan érd el a céljaidat.", photos: [] }],
   activities: [
     { text: "Maya Chen teljesített egy edzést", time: "Ma, 08:42", mark: "MC" },
@@ -83,6 +128,7 @@ function routeForCurrentState() {
   if (!user) return "/";
   if (user.role === "admin") {
     if (currentView === "guide") return "/admin/guide";
+    if (currentView === "training-plans") return "/admin/training-plans";
     if (currentView === "home") return "/admin/home";
     if (currentView === "overview") return "/admin/overview";
     if (currentView === "calendar") return "/admin/calendar";
@@ -98,6 +144,7 @@ function routeForCurrentState() {
   }
   if (user.role === "trainer") {
     if (currentView === "guide") return "/coach/guide";
+    if (currentView === "training-plans") return "/coach/training-plans";
     if (currentView === "home" || currentView === "trainer-home") return "/coach/home";
     if (currentView === "clients") return "/coach/clients";
     if (currentView === "calendar") return "/coach/calendar";
@@ -108,6 +155,7 @@ function routeForCurrentState() {
     return "/coach/settings";
   }
   if (currentView === "guide") return "/client/guide";
+  if (currentView === "training-plans") return "/client/training-plans";
   if (currentView === "home" || currentView === "profile") return "/client";
   if (currentView === "calendar") return "/client/calendar";
   if (currentView === "connections") return "/client/connections";
@@ -146,6 +194,7 @@ function restoreRouteFromUrl() {
 
   if (user.role === "admin") {
     if (segments[0] === "admin" && segments[1] === "guide") currentView = "guide";
+    else if (segments[0] === "admin" && segments[1] === "training-plans") currentView = "training-plans";
     else if (segments[0] === "admin" && segments[1] === "home") currentView = "home";
     else if (segments[0] === "admin" && segments[1] === "overview") currentView = "overview";
     else if (segments[0] === "admin" && segments[1] === "calendar") currentView = "calendar";
@@ -164,6 +213,7 @@ function restoreRouteFromUrl() {
     else if (segments[0] === "admin") currentView = segments[1] === "settings" ? "settings" : "overview";
   } else if (user.role === "trainer") {
     if (segments[0] === "coach" && segments[1] === "guide") currentView = "guide";
+    else if (segments[0] === "coach" && segments[1] === "training-plans") currentView = "training-plans";
     else if (segments[0] === "coach" && segments[1] === "home") currentView = "home";
     else if (segments[0] === "coach" && segments[1] === "calendar") currentView = "calendar";
     else if (segments[0] === "coach" && segments[1] === "profile") currentView = "coach-profile";
@@ -175,6 +225,7 @@ function restoreRouteFromUrl() {
       selectedClientId = segments[2];
     } else if (segments[0] === "coach" && segments[1] === "clients") currentView = "clients";
   } else if (segments[0] === "client" && segments[1] === "guide") currentView = "guide";
+  else if (segments[0] === "client" && segments[1] === "training-plans") currentView = "training-plans";
   else if (segments[0] === "client" && segments[1] === "calendar") currentView = "calendar";
   else if (segments[0] === "client" && segments[1] === "connections") currentView = "connections";
   else if (segments[0] === "client" && segments[1] === "notifications") currentView = "notifications";
@@ -231,7 +282,7 @@ async function restoreLocalCoachPhotos() {
 }
 
 function loadData() {
-  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; stored.groupWorkouts ||= []; if (!Array.isArray(stored.coachProfiles)) stored.coachProfiles = structuredClone(seedData.coachProfiles); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
+  try { const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)); if (!stored) return structuredClone(seedData); stored.connectionRequests ||= []; stored.notifications ||= []; stored.groupWorkouts ||= []; stored.trainingPlans ||= structuredClone(seedData.trainingPlans); if (!Array.isArray(stored.coachProfiles)) stored.coachProfiles = structuredClone(seedData.coachProfiles); stored.users.forEach((user) => { user.workouts ||= []; user.trainerIds ||= []; if (user.status === "Active") user.status = "Aktív"; if (user.status === "Paused") user.status = "Szüneteltetve"; if (user.goal === "Strength & mobility") user.goal = "Erő és mobilitás"; if (user.goal === "Return to running") user.goal = "Visszatérés a futáshoz"; if (user.goal === "Body recomposition") user.goal = "Testkompozíció"; }); return stored; }
   catch { return structuredClone(seedData); }
 }
 function saveData() {
@@ -771,16 +822,124 @@ function renderUserGuide() {
   return `<div class="topbar"><div><div class="eyebrow">Súgó</div><h1>Felhasználói kézikönyv</h1><p>A BackPlan funkcióinak és szerepköreinek útmutatója.</p></div></div><section class="panel guide-panel"><h2>Olvasd el vagy töltsd le a kézikönyvet</h2><p class="settings-help">A PDF fejezetenként ismerteti az adminisztrátori, edzői és kliensfunkciókat, képernyőképekkel és példákkal.</p><div class="topbar-actions"><a class="btn btn-ghost" href="/BackPlan_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Megnyitás új lapon</a><a class="btn btn-teal" href="/BackPlan_felhasznaloi_kezikonyv.pdf" download="BackPlan_felhasznaloi_kezikonyv.pdf">PDF letöltése</a></div></section>`;
 }
 
+function renderTrainingPlanExercise(exercise = {}) {
+  return `<div class="plan-exercise" data-plan-exercise>
+    <div class="field"><label>Gyakorlat neve</label><input name="exerciseName" list="exercise-catalog" required maxlength="120" value="${escapeHtml(exercise.name || "")}" placeholder="Keresés vagy saját gyakorlat" /><small class="settings-help">Kezdj el gépelni az alapgyakorlatok kereséséhez, vagy adj meg saját nevet.</small></div>
+    <div class="field"><label>Sorozat</label><input name="exerciseSets" type="number" min="1" max="30" required value="${escapeHtml(exercise.sets ?? 3)}" /></div>
+    <div class="field"><label>Ismétlés</label><input name="exerciseReps" required maxlength="60" value="${escapeHtml(exercise.reps || "")}" placeholder="pl. 8–10" /></div>
+    <div class="field"><label>Pihenő (mp)</label><input name="exerciseRest" type="number" min="0" max="1800" value="${escapeHtml(exercise.restSeconds ?? "")}" placeholder="90" /></div>
+    <div class="field span-2"><label>Megjegyzés</label><input name="exerciseNotes" maxlength="1000" value="${escapeHtml(exercise.notes || "")}" placeholder="Technikai vagy tempó instrukció" /></div>
+    <button type="button" class="text-button plan-remove-action" data-remove-plan-exercise>Gyakorlat eltávolítása</button>
+  </div>`;
+}
+
+function renderTrainingPlanDay(day = {}, index = 0) {
+  const exercises = day.exercises?.length ? day.exercises : [{ name: "", sets: 3, reps: "", restSeconds: "", notes: "" }];
+  return `<section class="plan-day" data-plan-day data-day-id="${escapeHtml(day.id || "")}">
+    <div class="plan-day-heading"><h3>Edzésnap</h3><button type="button" class="text-button" data-remove-plan-day>Nap eltávolítása</button></div>
+    <div class="field"><label>Edzésnap neve</label><input name="dayTitle" required maxlength="120" value="${escapeHtml(day.title || `Edzésnap ${index + 1}`)}" placeholder="pl. A nap · Alsótest" /></div>
+    <div class="field"><label>Edzésnap megjegyzése</label><textarea name="dayNotes" maxlength="1000" placeholder="Opcionális instrukciók">${escapeHtml(day.notes || "")}</textarea></div>
+    <div class="plan-exercises" data-plan-exercises>${exercises.map(renderTrainingPlanExercise).join("")}</div>
+    <button type="button" class="btn btn-ghost plan-add-exercise" data-add-plan-exercise>+ Gyakorlat hozzáadása</button>
+  </section>`;
+}
+
+function exerciseCatalogOptions() {
+  return `<datalist id="exercise-catalog">${EXERCISE_CATALOG.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>`;
+}
+
+function visibleTrainingPlanDaysForClient(client) {
+  const user = currentUser();
+  return (data.trainingPlans || [])
+    .filter((plan) => {
+      if (user?.role === "admin") return true;
+      const visibleToClient = plan.isPublic || ((plan.clientIds || []).includes(client.id) && (client.trainerIds || []).includes(plan.trainerId));
+      if (!visibleToClient) return false;
+      if (user?.role === "trainer") return plan.trainerId === user.id;
+      return true;
+    })
+    .flatMap((plan) => (plan.days || []).map((day, index) => ({
+      dayId: day.id || "",
+      label: `${plan.title} · ${day.title || `Edzésnap ${index + 1}`}`
+    })))
+    .filter((item) => item.dayId);
+}
+
+function trainingPlanDayLabel(dayId) {
+  if (!dayId) return "";
+  for (const plan of data.trainingPlans || []) {
+    const day = (plan.days || []).find((item) => item.id === dayId);
+    if (day) return `${plan.title} · ${day.title}`;
+  }
+  return "";
+}
+
+function renderTrainingPlanModal(plan = {}) {
+  const user = currentUser();
+  const clients = data.users.filter((item) => item.role === "client" && (item.trainerIds || []).includes(user.id));
+  const selectedClientIds = new Set(plan.clientIds || []);
+  const days = plan.days?.length ? plan.days : [{ title: "Edzésnap 1", exercises: [{ name: "", sets: 3, reps: "", notes: "" }] }];
+  return `<div class="modal-backdrop" id="modal-backdrop"><section class="modal modal-wide" role="dialog" aria-modal="true" aria-labelledby="plan-editor-title">
+    <div class="modal-head"><div><div class="eyebrow">${plan.id ? "Edzésterv szerkesztése" : "Új edzésterv"}</div><h2 id="plan-editor-title">${plan.id ? "Edzésterv szerkesztése" : "Edzésterv készítése"}</h2></div><button type="button" class="close" id="close-modal" aria-label="Bezárás">&times;</button></div>
+    <form id="training-plan-form" data-plan-id="${escapeHtml(plan.id || "")}">
+      <div class="field"><label for="plan-title">Edzésterv neve</label><input id="plan-title" name="title" required maxlength="120" value="${escapeHtml(plan.title || "")}" placeholder="pl. Alapozó erőnléti terv" /></div>
+      <div class="field"><label for="plan-description">Rövid leírás</label><textarea id="plan-description" name="description" maxlength="2000" placeholder="Kinek szól, mi a terv fókusza?">${escapeHtml(plan.description || "")}</textarea><small class="settings-help">Ne adj meg diagnózist, sérülésre vagy egészségi állapotra vonatkozó adatot.</small></div>
+      <label class="plan-public-toggle"><input type="checkbox" id="plan-public" name="isPublic" ${plan.isPublic ? "checked" : ""} /> <span><strong>Publikus edzésterv</strong><small>Minden bejelentkezett felhasználó számára látható.</small></span></label>
+      <fieldset class="plan-sharing" id="plan-client-access" ${plan.isPublic ? "disabled" : ""}><legend>Megosztás a hozzád rendelt kliensekkel</legend>${clients.length
+        ? clients.map((client) => `<label><input type="checkbox" name="clientIds" value="${escapeHtml(client.id)}" ${selectedClientIds.has(client.id) ? "checked" : ""} /> ${escapeHtml(client.name)}</label>`).join("")
+        : `<p class="settings-help">Még nincs hozzád rendelt kliensed; előbb hozz létre kapcsolatot a klienssel.</p>`}</fieldset>
+      <div class="plan-days-heading"><h3>Edzésnapok és gyakorlatok</h3><p>Minden edzésnaphoz legalább egy gyakorlatot adj meg.</p></div>
+      <div id="training-plan-days">${days.map((day, index) => renderTrainingPlanDay(day, index)).join("")}</div>
+      ${exerciseCatalogOptions()}
+      <button type="button" class="btn btn-ghost" id="add-plan-day">+ Edzésnap hozzáadása</button>
+      <div class="plan-editor-actions"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button type="submit" class="btn btn-dark">Edzésterv mentése</button></div>
+    </form>
+  </section></div>`;
+}
+
+function renderTrainingPlanCard(plan, user) {
+  const isOwner = user.role === "trainer" && plan.trainerId === user.id;
+  const sharingLabel = plan.isPublic
+    ? "Publikus · bejelentkezett felhasználóknak"
+    : isOwner
+      ? plan.clientIds?.length
+        ? `Megosztva: ${plan.clientIds.map((id) => data.users.find((item) => item.id === id)?.name || "Kliens").map(escapeHtml).join(", ")}`
+        : "Privát · csak te láthatod"
+      : "Megosztott edzésterv";
+  return `<article class="training-plan-card">
+    <div class="training-plan-heading"><div><div class="eyebrow">${escapeHtml(plan.trainerName || (isOwner ? user.name : "BackPlan edző"))}</div><h2>${escapeHtml(plan.title)}</h2></div><div class="training-plan-actions">${isOwner ? `<button type="button" class="btn btn-ghost" data-edit-training-plan="${escapeHtml(plan.id)}">Szerkesztés</button><button type="button" class="text-button plan-delete-action" data-delete-training-plan="${escapeHtml(plan.id)}">Törlés</button>` : ""}</div></div>
+    <p class="training-plan-description">${escapeHtml(plan.description || "Nincs leírás.")}</p><div class="training-plan-meta"><span class="status ${plan.isPublic ? "status-active" : "status-paused"}">${escapeHtml(sharingLabel)}</span><span>${plan.days?.length || 0} edzésnap</span></div>
+    <div class="training-plan-days">${(plan.days || []).map((day, index) => `<section class="training-plan-day"><div><span class="eyebrow">Edzésnap ${index + 1}</span><h3>${escapeHtml(day.title)}</h3>${day.notes ? `<p>${escapeHtml(day.notes)}</p>` : ""}</div><div class="training-plan-exercises">${(day.exercises || []).map((exercise) => `<div class="training-plan-exercise"><strong>${escapeHtml(exercise.name)}</strong><span>${escapeHtml(exercise.sets)} × ${escapeHtml(exercise.reps)}${exercise.restSeconds !== null && exercise.restSeconds !== "" ? ` · ${escapeHtml(exercise.restSeconds)} mp pihenő` : ""}</span>${exercise.notes ? `<p>${escapeHtml(exercise.notes)}</p>` : ""}</div>`).join("")}</div></section>`).join("")}</div>
+  </article>`;
+}
+
+function renderTrainingPlans(user) {
+  const plans = (data.trainingPlans || []).filter((plan) => {
+    if (user.role === "trainer") return plan.trainerId === user.id || plan.isPublic;
+    if (user.role === "client") return plan.isPublic || ((plan.clientIds || []).includes(user.id) && (user.trainerIds || []).includes(plan.trainerId));
+    return plan.isPublic;
+  });
+  const isTrainer = user.role === "trainer";
+  const description = isTrainer
+    ? "Állíts össze többnapos terveket gyakorlatokkal, majd oszd meg a kapcsolt kliensekkel vagy tedd publikussá."
+    : "A neked megosztott és minden bejelentkezett felhasználó számára elérhető edzéstervek.";
+  return `<div class="topbar"><div><div class="eyebrow">${isTrainer ? "Edzői tér" : "Munkatér"} / Tervezés</div><h1>Edzéstervek</h1><p>${description}</p></div>${isTrainer ? `<button type="button" class="btn btn-teal" id="add-training-plan">+ Új edzésterv</button>` : ""}</div>
+    ${plans.length ? `<div class="training-plan-list">${plans.map((plan) => renderTrainingPlanCard(plan, user)).join("")}</div>` : `<section class="panel empty-state">${isTrainer ? "Még nincs edzésterved. Hozz létre egyet, és válaszd ki, kikkel osztod meg." : "Jelenleg nincs számodra elérhető edzésterv."}</section>`}`;
+}
+
 function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
-  const navigation = isAdmin
+  let navigation = isAdmin
     ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
     : isTrainer
       ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`;
+  navigation += `<button class="nav-btn ${currentView === "training-plans" ? "active" : ""}" data-view="training-plans">Edzéstervek</button>`;
   const workspace = currentView === "guide"
     ? renderUserGuide()
+    : currentView === "training-plans"
+      ? renderTrainingPlans(user)
     : isAdmin
       ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
       : isTrainer
@@ -904,7 +1063,8 @@ function renderCalendar(user) {
   const selectedLabel = new Intl.DateTimeFormat("hu-HU", { dateStyle: "full" }).format(dateFromInputValue(selectedDate));
   const selectedEventRows = selectedEvents.map((event) => {
     if (event.kind === "individual") {
-      return `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : event.workout.status === "Lemondva" ? "cancelled" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`;
+      const planDayLabel = trainingPlanDayLabel(event.workout.trainingPlanDayId);
+      return `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${planDayLabel ? `<p>Edzéstervnap: ${escapeHtml(planDayLabel)}</p>` : ""}${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : event.workout.status === "Lemondva" ? "cancelled" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`;
     }
     const workout = event.workout;
     const startsAt = groupWorkoutDate(workout);
@@ -986,7 +1146,7 @@ function renderEnhancedClientDetail(client) {
   if (!client) return renderClients();
   const workouts = client.workouts || [];
   const assignedTrainers = (client.trainerIds || []).map((id) => trainers().find((trainer) => trainer.id === id)).filter(Boolean);
-  return `<div class="topbar"><div><button class="text-button" data-view="clients">← Vissza a kliensekhez</button><div class="eyebrow" style="margin-top:18px">Kliens / ${escapeHtml(client.name)}</div><h1>${escapeHtml(client.name)}</h1><p>${escapeHtml(client.goal || "Nincs beállított fókusz")}</p></div><div style="display:flex;gap:10px"><button class="btn btn-ghost" id="edit-client">Profil szerkesztése</button><button class="btn btn-ghost" id="manage-trainers">Edzők kezelése</button><button class="btn btn-teal" id="add-workout">+ Új edzés</button></div></div><div class="detail-layout"><section class="panel profile-card"><div class="profile-avatar">${initials(client.name)}</div><h2>${escapeHtml(client.name)}</h2><p>${escapeHtml(client.email)}</p><span class="status status-${client.status === "Aktív" ? "active" : "paused"}">${escapeHtml(client.status || "Aktív")}</span><div class="profile-meta"><div class="meta-row"><span>Fókusz</span><strong>${escapeHtml(client.goal || "Nincs beállítva")}</strong></div><div class="meta-row"><span>Edzők</span><strong>${assignedTrainers.length ? assignedTrainers.map((trainer) => escapeHtml(trainer.name)).join(", ") : "Nincs hozzárendelve"}</strong></div><div class="meta-row"><span>Következő edzés</span><strong>${escapeHtml(nextSessionLabel(client))}</strong></div></div></section><section class="panel"><div class="panel-head"><h2>Edzések</h2><span class="eyebrow" style="margin:0">${workouts.length} rögzítve</span></div>${workouts.length ? workouts.map((workout, index) => `<div class="session-row"><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(trainerName(workout.trainerId))}</p>${workout.notes ? `<p>${escapeHtml(workout.notes)}</p>` : ""}</div><span class="status status-${workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(workout.status)}</span><button class="text-button" data-workout-index="${index}">Szerkesztés</button></div>`).join("") : `<div class="empty-state">Ehhez a klienshez még nincs rögzített edzés.</div>`}</section></div>`;
+  return `<div class="topbar"><div><button class="text-button" data-view="clients">← Vissza a kliensekhez</button><div class="eyebrow" style="margin-top:18px">Kliens / ${escapeHtml(client.name)}</div><h1>${escapeHtml(client.name)}</h1><p>${escapeHtml(client.goal || "Nincs beállított fókusz")}</p></div><div style="display:flex;gap:10px"><button class="btn btn-ghost" id="edit-client">Profil szerkesztése</button><button class="btn btn-ghost" id="manage-trainers">Edzők kezelése</button><button class="btn btn-teal" id="add-workout">+ Új edzés</button></div></div><div class="detail-layout"><section class="panel profile-card"><div class="profile-avatar">${initials(client.name)}</div><h2>${escapeHtml(client.name)}</h2><p>${escapeHtml(client.email)}</p><span class="status status-${client.status === "Aktív" ? "active" : "paused"}">${escapeHtml(client.status || "Aktív")}</span><div class="profile-meta"><div class="meta-row"><span>Fókusz</span><strong>${escapeHtml(client.goal || "Nincs beállítva")}</strong></div><div class="meta-row"><span>Edzők</span><strong>${assignedTrainers.length ? assignedTrainers.map((trainer) => escapeHtml(trainer.name)).join(", ") : "Nincs hozzárendelve"}</strong></div><div class="meta-row"><span>Következő edzés</span><strong>${escapeHtml(nextSessionLabel(client))}</strong></div></div></section><section class="panel"><div class="panel-head"><h2>Edzések</h2><span class="eyebrow" style="margin:0">${workouts.length} rögzítve</span></div>${workouts.length ? workouts.map((workout, index) => `<div class="session-row"><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(trainerName(workout.trainerId))}</p>${trainingPlanDayLabel(workout.trainingPlanDayId) ? `<p>Edzéstervnap: ${escapeHtml(trainingPlanDayLabel(workout.trainingPlanDayId))}</p>` : ""}${workout.notes ? `<p>${escapeHtml(workout.notes)}</p>` : ""}</div><span class="status status-${workout.status === "Teljesítve" ? "active" : "paused"}">${escapeHtml(workout.status)}</span><button class="text-button" data-workout-index="${index}">Szerkesztés</button></div>`).join("") : `<div class="empty-state">Ehhez a klienshez még nincs rögzített edzés.</div>`}</section></div>`;
 }
 
 function renderModal(type, client = {}) {
@@ -995,7 +1155,10 @@ function renderModal(type, client = {}) {
 }
 
 function renderWorkoutModal(client, workout = {}, index = "") {
-  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${escapeHtml(client.name)} / Edzés</div><h2>${index === "" ? "Új edzés hozzáadása" : "Edzés szerkesztése"}</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="workout-form" data-index="${index}" data-client-id="${escapeHtml(client.id)}"><div class="form-grid"><div class="field"><label for="workout-date">Dátum</label><input id="workout-date" name="date" required type="date" value="${escapeHtml(workoutDateToInputValue(workout.date))}" /></div><div class="field"><label for="workout-time">Időpont</label><input id="workout-time" name="time" required type="time" value="${escapeHtml(workout.time || "09:00")}" /></div><div class="field span-2"><label for="workout-type">Edzés típusa</label><input id="workout-type" name="type" required value="${escapeHtml(workout.type || "")}" placeholder="pl. Teljes testes erősítés" /></div><div class="field"><label for="workout-duration">Időtartam (perc)</label><input id="workout-duration" name="duration" required type="number" min="1" value="${workout.duration || 60}" /></div><div class="field"><label for="workout-status">Állapot</label><select id="workout-status" name="status"><option ${workout.status === "Beütemezve" ? "selected" : ""}>Beütemezve</option><option ${workout.status === "Teljesítve" ? "selected" : ""}>Teljesítve</option><option ${workout.status === "Lemondva" ? "selected" : ""}>Lemondva</option></select></div><div class="field span-2"><label for="workout-notes">Megjegyzés</label><textarea id="workout-notes" name="notes" placeholder="Rövid megjegyzés az edzésről">${escapeHtml(workout.notes || "")}</textarea><small class="privacy-warning">Ne írj ide diagnózist, sérülést, gyógyszerelést vagy más egészségügyi adatot.</small></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edzés mentése</button></div></form></div></div>`;
+  const planDays = visibleTrainingPlanDaysForClient(client);
+  const selectedDayId = workout.trainingPlanDayId || "";
+  const dayOptions = planDays.map(({ dayId, label }) => `<option value="${escapeHtml(dayId)}" ${selectedDayId === dayId ? "selected" : ""}>${escapeHtml(label)}</option>`).join("");
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">${escapeHtml(client.name)} / Edzés</div><h2>${index === "" ? "Új edzés hozzáadása" : "Edzés szerkesztése"}</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="workout-form" data-index="${index}" data-client-id="${escapeHtml(client.id)}"><div class="form-grid"><div class="field"><label for="workout-date">Dátum</label><input id="workout-date" name="date" required type="date" value="${escapeHtml(workoutDateToInputValue(workout.date))}" /></div><div class="field"><label for="workout-time">Időpont</label><input id="workout-time" name="time" required type="time" value="${escapeHtml(workout.time || "09:00")}" /></div><div class="field span-2"><label for="workout-type">Edzés típusa</label><input id="workout-type" name="type" list="exercise-catalog" required value="${escapeHtml(workout.type || "")}" placeholder="Keresés vagy saját edzéstípus" />${exerciseCatalogOptions()}<small class="settings-help">Válassz az alapgyakorlatok közül, vagy írj be saját edzéstípust.</small></div><div class="field span-2"><label for="workout-training-plan-day">Edzésnap (nem kötelező)</label><select id="workout-training-plan-day" name="trainingPlanDayId"><option value="">Nincs edzésnaphoz rendelve</option>${dayOptions}</select><small class="settings-help">${planDays.length ? "A kliens számára elérhető edzésterv napjai közül választhatsz." : "Ehhez a klienshez jelenleg nincs elérhető edzéstervnap."}</small></div><div class="field"><label for="workout-duration">Időtartam (perc)</label><input id="workout-duration" name="duration" required type="number" min="1" value="${workout.duration || 60}" /></div><div class="field"><label for="workout-status">Állapot</label><select id="workout-status" name="status"><option ${workout.status === "Beütemezve" ? "selected" : ""}>Beütemezve</option><option ${workout.status === "Teljesítve" ? "selected" : ""}>Teljesítve</option><option ${workout.status === "Lemondva" ? "selected" : ""}>Lemondva</option></select></div><div class="field span-2"><label for="workout-notes">Megjegyzés</label><textarea id="workout-notes" name="notes" placeholder="Rövid megjegyzés az edzésről">${escapeHtml(workout.notes || "")}</textarea><small class="privacy-warning">Ne írj ide diagnózist, sérülést, gyógyszerelést vagy más egészségügyi adatot.</small></div></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edzés mentése</button></div></form></div></div>`;
 }
 
 function renderTrainerAssignmentModal(client) {
@@ -1023,6 +1186,87 @@ function openModal(client = {}) { document.body.insertAdjacentHTML("beforeend", 
 function bindModalEvents() {
   document.querySelector("#close-modal")?.addEventListener("click", () => document.querySelector("#modal-backdrop").remove());
   document.querySelector("#cancel-modal")?.addEventListener("click", () => document.querySelector("#modal-backdrop").remove());
+  const trainingPlanForm = document.querySelector("#training-plan-form");
+  const planDays = document.querySelector("#training-plan-days");
+  document.querySelector("#plan-public")?.addEventListener("change", (event) => {
+    document.querySelector("#plan-client-access").disabled = event.currentTarget.checked;
+  });
+  document.querySelector("#add-plan-day")?.addEventListener("click", () => {
+    if (planDays.children.length >= 30) return toast("Egy edzésterv legfeljebb 30 edzésnapot tartalmazhat.");
+    planDays.insertAdjacentHTML("beforeend", renderTrainingPlanDay({}, planDays.children.length));
+  });
+  trainingPlanForm?.addEventListener("click", (event) => {
+    const addExercise = event.target.closest("[data-add-plan-exercise]");
+    if (addExercise) {
+      const exercises = addExercise.parentElement.querySelector("[data-plan-exercises]");
+      if (exercises.children.length >= 30) return toast("Egy edzésnap legfeljebb 30 gyakorlatot tartalmazhat.");
+      exercises.insertAdjacentHTML("beforeend", renderTrainingPlanExercise());
+      return;
+    }
+    const removeExercise = event.target.closest("[data-remove-plan-exercise]");
+    if (removeExercise) {
+      removeExercise.closest("[data-plan-exercise]").remove();
+      return;
+    }
+    const removeDay = event.target.closest("[data-remove-plan-day]");
+    if (removeDay) removeDay.closest("[data-plan-day]").remove();
+  });
+  trainingPlanForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const isPublic = form.querySelector("#plan-public").checked;
+    const plan = {
+      id: form.dataset.planId || null,
+      title: form.querySelector('[name="title"]').value.trim(),
+      description: form.querySelector('[name="description"]').value.trim(),
+      isPublic,
+      clientIds: isPublic ? [] : [...form.querySelectorAll('[name="clientIds"]:checked')].map((input) => input.value),
+      days: [...form.querySelectorAll("[data-plan-day]")].map((day) => ({
+        id: day.dataset.dayId || null,
+        title: day.querySelector('[name="dayTitle"]').value.trim(),
+        notes: day.querySelector('[name="dayNotes"]').value.trim(),
+        exercises: [...day.querySelectorAll("[data-plan-exercise]")].map((exercise) => ({
+          name: exercise.querySelector('[name="exerciseName"]').value.trim(),
+          sets: Number(exercise.querySelector('[name="exerciseSets"]').value),
+          reps: exercise.querySelector('[name="exerciseReps"]').value.trim(),
+          restSeconds: exercise.querySelector('[name="exerciseRest"]').value === "" ? null : Number(exercise.querySelector('[name="exerciseRest"]').value),
+          notes: exercise.querySelector('[name="exerciseNotes"]').value.trim()
+        }))
+      }))
+    };
+    if (!plan.days.length || plan.days.some((day) => !day.title || !day.exercises.length || day.exercises.some((exercise) => !exercise.name || !exercise.reps || !Number.isInteger(exercise.sets) || exercise.sets < 1 || exercise.sets > 30 || (exercise.restSeconds !== null && (!Number.isInteger(exercise.restSeconds) || exercise.restSeconds < 0 || exercise.restSeconds > 1800))))) {
+      return toast("Adj meg minden edzésnaphoz legalább egy érvényes gyakorlatot, sorozatot és ismétlésszámot.");
+    }
+    const submit = form.querySelector('button[type="submit"]');
+    submit.disabled = true;
+    try {
+      if (remoteMode) {
+        await window.remoteStore.saveTrainingPlan(plan);
+        document.querySelector("#modal-backdrop")?.remove();
+        await refreshRemote();
+      } else {
+        const existingPlan = (data.trainingPlans || []).find((item) => item.id === plan.id);
+        const savedPlan = {
+          ...plan,
+          id: plan.id || `plan-${Date.now()}`,
+          trainerId: currentUser().id,
+          trainerName: currentUser().name,
+          updatedAt: new Date().toISOString(),
+          days: plan.days.map((day) => ({ ...day, id: day.id || `plan-day-${crypto.randomUUID()}` }))
+        };
+        data.trainingPlans ||= [];
+        if (existingPlan) Object.assign(existingPlan, savedPlan);
+        else data.trainingPlans.unshift(savedPlan);
+        saveData();
+        document.querySelector("#modal-backdrop")?.remove();
+        render();
+      }
+      toast(plan.id ? "Az edzésterv frissítve." : "Az edzésterv létrehozva.");
+    } catch (error) {
+      submit.disabled = false;
+      toast(`Nem sikerült menteni az edzéstervet: ${error.message}`);
+    }
+  });
   document.querySelector("#group-workout-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -1084,6 +1328,7 @@ function bindModalEvents() {
     const workoutId = index === "" ? "" : client.workouts[Number(index)]?.id || "";
     if (workoutId) values.id = workoutId;
     if (index === "") client.workouts.push(values); else client.workouts[Number(index)] = values;
+    values.trainingPlanDayId ||= "";
     client.sessions = client.workouts.filter((workout) => workout.status === "Teljesítve").length; if (remoteMode) window.remoteStore.saveWorkout(client.id, values, workoutId).then(refreshRemote).catch((error) => toast(`Mentési hiba: ${error.message}`)); saveData(); document.querySelector("#modal-backdrop").remove(); render(); toast(index === "" ? "Edzés hozzáadva" : "Edzés frissítve");
   });
   document.querySelector("#calendar-workout-client-form")?.addEventListener("submit", (event) => {
@@ -1146,7 +1391,8 @@ async function exportMyData() {
                 const profile = coachProfileFor(user.id);
                 return profile ? { ...profile, photos: (profile.photos || []).map(({ path }) => ({ path })) } : null;
               })()
-            : null
+            : null,
+          trainingPlans: (data.trainingPlans || []).filter((plan) => plan.trainerId === user.id || (plan.clientIds || []).includes(user.id))
         };
     const file = new Blob([JSON.stringify(exportData, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(file);
@@ -1245,6 +1491,32 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
     navigateToView(button.dataset.view);
     if (button.dataset.view === "administrators") void loadAdminAccounts();
+  }));
+  document.querySelector("#add-training-plan")?.addEventListener("click", () => openModal(renderTrainingPlanModal()));
+  document.querySelectorAll("[data-edit-training-plan]").forEach((button) => button.addEventListener("click", () => {
+    const plan = (data.trainingPlans || []).find((item) => item.id === button.dataset.editTrainingPlan && item.trainerId === currentUser()?.id);
+    if (!plan) return toast("Az edzésterv nem érhető el vagy nincs szerkesztési jogosultságod.");
+    openModal(renderTrainingPlanModal(plan));
+  }));
+  document.querySelectorAll("[data-delete-training-plan]").forEach((button) => button.addEventListener("click", async () => {
+    const planId = button.dataset.deleteTrainingPlan;
+    const plan = (data.trainingPlans || []).find((item) => item.id === planId && item.trainerId === currentUser()?.id);
+    if (!plan) return toast("Az edzésterv nem érhető el vagy nincs törlési jogosultságod.");
+    if (!confirm(`Biztosan törlöd a(z) „${plan.title}” edzéstervet? Ez nem vonható vissza.`)) return;
+    button.disabled = true;
+    try {
+      if (remoteMode) await window.remoteStore.deleteTrainingPlan(planId);
+      else {
+        data.trainingPlans = data.trainingPlans.filter((item) => item.id !== planId);
+        saveData();
+      }
+      await refreshRemote();
+      if (!remoteMode) render();
+      toast("Az edzésterv törölve.");
+    } catch (error) {
+      button.disabled = false;
+      toast(`Nem sikerült törölni az edzéstervet: ${error.message}`);
+    }
   }));
   document.querySelectorAll("[data-admin-period]").forEach((button) => button.addEventListener("click", () => {
     adminDashboardPeriod = button.dataset.adminPeriod;

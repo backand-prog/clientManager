@@ -12,7 +12,8 @@
       duration: workout.duration_minutes,
       status: workout.status,
       trainerId: workout.trainer_id || "",
-      notes: workout.notes || ""
+      notes: workout.notes || "",
+      trainingPlanDayId: workout.training_plan_day_id || ""
     };
   }
 
@@ -32,6 +33,35 @@
     };
   }
 
+  function mapTrainingPlan(plan) {
+    return {
+      id: plan.id,
+      trainerId: plan.trainer_id,
+      trainerName: plan.trainer_name || "",
+      title: plan.title,
+      description: plan.description || "",
+      isPublic: Boolean(plan.is_public),
+      clientIds: (plan.training_plan_clients || []).map((assignment) => assignment.client_id),
+      updatedAt: plan.updated_at,
+      days: (plan.training_plan_days || [])
+        .sort((a, b) => a.day_number - b.day_number)
+        .map((day) => ({
+          id: day.id,
+          title: day.title,
+          notes: day.notes || "",
+          exercises: (day.training_plan_exercises || [])
+            .sort((a, b) => a.position - b.position)
+            .map((exercise) => ({
+              name: exercise.name,
+              sets: exercise.sets,
+              reps: exercise.reps,
+              restSeconds: exercise.rest_seconds,
+              notes: exercise.notes || ""
+            }))
+        }))
+    };
+  }
+
   async function load() {
     if (!enabled) return null;
     const { data: authData, error } = await client.auth.getUser();
@@ -39,14 +69,17 @@
     if (error) throw error;
     const user = authData?.user;
     if (!user) return null;
-    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult] = await Promise.all([
       client.from("profiles").select("*").order("created_at"),
       client.from("client_trainers").select("client_id, trainer_id"),
       client.from("workouts").select("*").order("workout_date", { ascending: false }),
       client.from("connection_requests").select("*").order("created_at", { ascending: false }),
       client.from("connection_notifications").select("*").order("created_at", { ascending: false }).limit(30),
       client.from("coach_public_profiles").select("*").order("updated_at", { ascending: false }),
-      client.rpc("get_group_workouts")
+      client.rpc("get_group_workouts"),
+      client.from("training_plans")
+        .select("*, training_plan_clients(client_id), training_plan_days(*, training_plan_exercises(*))")
+        .order("updated_at", { ascending: false })
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
@@ -55,6 +88,7 @@
     if (notificationsResult.error) throw notificationsResult.error;
     if (coachProfilesResult.error) throw coachProfilesResult.error;
     if (groupWorkoutsResult.error) throw groupWorkoutsResult.error;
+    if (trainingPlansResult.error) throw trainingPlansResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
     const profiles = profilesResult.data || [];
@@ -99,6 +133,12 @@
       }),
       activities: [],
       groupWorkouts: (groupWorkoutsResult.data || []).map(mapGroupWorkout),
+      trainingPlans: (trainingPlansResult.data || []).map((plan) => mapTrainingPlan({
+        ...plan,
+        trainer_name: profiles.find((profile) => profile.id === plan.trainer_id)?.full_name
+          || (coachProfilesResult.data || []).find((profile) => profile.id === plan.trainer_id)?.display_name
+          || ""
+      })),
       trainerApplications,
       connectionRequests: (requestsResult.data || []).map((request) => ({
         id: request.id,
@@ -139,15 +179,19 @@
     const user = authData.user;
     if (!user) throw new Error("A fiókadatok letöltéséhez jelentkezz be.");
 
-    const [profileResult, workouts, connections, connectionRequests, notifications, coachProfileResult] = await Promise.all([
+    const [profileResult, workouts, connections, connectionRequests, notifications, coachProfileResult, trainingPlansResult] = await Promise.all([
       client.from("profiles").select("*").eq("id", user.id).single(),
       selectAllRows(() => client.from("workouts").select("*").eq("client_id", user.id).order("workout_date", { ascending: false })),
       selectAllRows(() => client.from("client_trainers").select("client_id, trainer_id").or(`client_id.eq.${user.id},trainer_id.eq.${user.id}`)),
       selectAllRows(() => client.from("connection_requests").select("*").or(`requester_id.eq.${user.id},recipient_id.eq.${user.id}`).order("created_at", { ascending: false })),
       selectAllRows(() => client.from("connection_notifications").select("*").eq("user_id", user.id).order("created_at", { ascending: false })),
-      client.from("coach_public_profiles").select("*").eq("id", user.id).maybeSingle()
+      client.from("coach_public_profiles").select("*").eq("id", user.id).maybeSingle(),
+      client.from("training_plans")
+        .select("*, training_plan_clients(client_id), training_plan_days(*, training_plan_exercises(*))")
+        .eq("trainer_id", user.id)
+        .order("updated_at", { ascending: false })
     ]);
-    for (const result of [profileResult, coachProfileResult]) {
+    for (const result of [profileResult, coachProfileResult, trainingPlansResult]) {
       if (result.error) throw result.error;
     }
 
@@ -159,7 +203,8 @@
       connections,
       connectionRequests,
       notifications,
-      coachProfile: coachProfileResult.data || null
+      coachProfile: coachProfileResult.data || null,
+      trainingPlans: (trainingPlansResult.data || []).map(mapTrainingPlan)
     };
   }
 
@@ -205,7 +250,7 @@
 
   async function saveWorkout(clientId, workout, workoutId) {
     if (!enabled) return;
-    const payload = { client_id: clientId, trainer_id: workout.trainerId || null, workout_date: workout.date, workout_time: workout.time, workout_type: workout.type, duration_minutes: workout.duration, status: workout.status, notes: workout.notes || null };
+    const payload = { client_id: clientId, trainer_id: workout.trainerId || null, training_plan_day_id: workout.trainingPlanDayId || null, workout_date: workout.date, workout_time: workout.time, workout_type: workout.type, duration_minutes: workout.duration, status: workout.status, notes: workout.notes || null };
     const result = workoutId ? await client.from("workouts").update(payload).eq("id", workoutId) : await client.from("workouts").insert(payload);
     if (result.error) throw result.error;
   }
@@ -220,6 +265,19 @@
       workout_capacity: workout.capacity
     });
     if (result.error) throw result.error;
+  }
+
+  async function saveTrainingPlan(plan) {
+    if (!enabled) return null;
+    const { data: planId, error } = await client.rpc("save_training_plan", { plan_payload: plan });
+    if (error) throw error;
+    return planId;
+  }
+
+  async function deleteTrainingPlan(planId) {
+    if (!enabled) return;
+    const { error } = await client.rpc("delete_training_plan", { plan_id: planId });
+    if (error) throw error;
   }
 
   async function joinGroupWorkout(workoutId) {
@@ -327,5 +385,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, saveTrainingPlan, deleteTrainingPlan, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

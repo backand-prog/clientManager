@@ -796,3 +796,402 @@ grant execute on function public.create_group_workout(text, text, timestamptz, i
 grant execute on function public.join_group_workout(uuid) to authenticated;
 grant execute on function public.leave_group_workout(uuid) to authenticated;
 grant execute on function public.cancel_group_workout(uuid) to authenticated;
+
+create table if not exists public.training_plans (
+  id uuid primary key default gen_random_uuid(),
+  trainer_id uuid not null references public.profiles(id) on delete cascade,
+  title text not null check (char_length(trim(title)) between 1 and 120),
+  description text not null default '' check (char_length(description) <= 2000),
+  is_public boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.training_plan_clients (
+  plan_id uuid not null references public.training_plans(id) on delete cascade,
+  client_id uuid not null references public.profiles(id) on delete cascade,
+  primary key (plan_id, client_id)
+);
+
+create table if not exists public.training_plan_days (
+  id uuid primary key default gen_random_uuid(),
+  plan_id uuid not null references public.training_plans(id) on delete cascade,
+  day_number integer not null check (day_number between 1 and 30),
+  title text not null check (char_length(trim(title)) between 1 and 120),
+  notes text not null default '' check (char_length(notes) <= 1000)
+);
+
+alter table public.training_plan_days
+  drop constraint if exists training_plan_days_plan_id_day_number_key;
+
+alter table public.workouts
+  add column if not exists training_plan_day_id uuid references public.training_plan_days(id) on delete set null;
+
+create index if not exists workouts_training_plan_day_idx
+on public.workouts (training_plan_day_id)
+where training_plan_day_id is not null;
+
+create table if not exists public.training_plan_exercises (
+  id uuid primary key default gen_random_uuid(),
+  day_id uuid not null references public.training_plan_days(id) on delete cascade,
+  position integer not null check (position between 1 and 30),
+  name text not null check (char_length(trim(name)) between 1 and 120),
+  sets integer not null check (sets between 1 and 30),
+  reps text not null check (char_length(trim(reps)) between 1 and 60),
+  rest_seconds integer check (rest_seconds between 0 and 1800),
+  notes text not null default '' check (char_length(notes) <= 1000),
+  unique (day_id, position)
+);
+
+create index if not exists training_plans_trainer_updated_idx
+on public.training_plans (trainer_id, updated_at desc);
+create index if not exists training_plan_clients_client_idx
+on public.training_plan_clients (client_id, plan_id);
+
+create or replace function public.can_view_training_plan(candidate_plan_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select public.current_role() in ('admin', 'trainer', 'client')
+    and exists (
+      select 1
+      from public.training_plans tp
+      where tp.id = candidate_plan_id
+        and (
+          tp.trainer_id = auth.uid()
+          or tp.is_public
+          or exists (
+            select 1
+            from public.training_plan_clients tpc
+            join public.client_trainers ct
+              on ct.client_id = tpc.client_id and ct.trainer_id = tp.trainer_id
+            where tpc.plan_id = tp.id and tpc.client_id = auth.uid()
+          )
+        )
+    );
+$$;
+
+revoke all on function public.can_view_training_plan(uuid) from public, anon;
+grant execute on function public.can_view_training_plan(uuid) to authenticated;
+
+alter table public.training_plans enable row level security;
+alter table public.training_plan_clients enable row level security;
+alter table public.training_plan_days enable row level security;
+alter table public.training_plan_exercises enable row level security;
+
+drop policy if exists training_plans_read on public.training_plans;
+create policy training_plans_read on public.training_plans
+for select to authenticated
+using (public.can_view_training_plan(id));
+
+drop policy if exists training_plan_clients_read on public.training_plan_clients;
+create policy training_plan_clients_read on public.training_plan_clients
+for select to authenticated
+using (
+  (
+    client_id = auth.uid()
+    and exists (
+      select 1
+      from public.training_plans tp
+      join public.client_trainers ct on ct.trainer_id = tp.trainer_id
+      where tp.id = training_plan_clients.plan_id and ct.client_id = auth.uid()
+    )
+  )
+  or exists (
+    select 1 from public.training_plans tp
+    where tp.id = training_plan_clients.plan_id and tp.trainer_id = auth.uid()
+  )
+);
+
+drop policy if exists training_plan_days_read on public.training_plan_days;
+create policy training_plan_days_read on public.training_plan_days
+for select to authenticated
+using (public.can_view_training_plan(plan_id));
+
+drop policy if exists training_plan_exercises_read on public.training_plan_exercises;
+create policy training_plan_exercises_read on public.training_plan_exercises
+for select to authenticated
+using (
+  exists (
+    select 1
+    from public.training_plan_days tpd
+    where tpd.id = training_plan_exercises.day_id
+      and public.can_view_training_plan(tpd.plan_id)
+  )
+);
+
+revoke all on public.training_plans, public.training_plan_clients,
+  public.training_plan_days, public.training_plan_exercises
+from public, anon, authenticated;
+grant select on public.training_plans, public.training_plan_clients,
+  public.training_plan_days, public.training_plan_exercises to authenticated;
+
+create or replace function public.validate_workout_training_plan_day()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_role public.user_role := public.current_role();
+  plan_trainer_id uuid;
+  plan_is_public boolean;
+begin
+  if new.training_plan_day_id is null then
+    return new;
+  end if;
+
+  select tp.trainer_id, tp.is_public
+  into plan_trainer_id, plan_is_public
+  from public.training_plan_days tpd
+  join public.training_plans tp on tp.id = tpd.plan_id
+  where tpd.id = new.training_plan_day_id;
+
+  if not found then
+    raise exception 'A kiválasztott edzéstervnap nem található.';
+  end if;
+
+  if actor_role = 'admin' then
+    return new;
+  elsif actor_role = 'trainer' then
+    if new.trainer_id is distinct from auth.uid()
+      or plan_trainer_id <> auth.uid()
+      or not public.is_assigned_trainer(new.client_id) then
+      raise exception 'Csak saját edzésterved napját kapcsolhatod hozzád rendelt klienshez.';
+    end if;
+  elsif actor_role = 'client' then
+    if new.client_id <> auth.uid() then
+      raise exception 'Edzésnapot csak a saját edzésedhez választhatsz.';
+    end if;
+  else
+    raise exception 'Nincs jogosultságod edzésnapot kapcsolni.';
+  end if;
+
+  if not plan_is_public and not exists (
+    select 1
+    from public.training_plan_clients tpc
+    join public.client_trainers ct
+      on ct.client_id = tpc.client_id and ct.trainer_id = plan_trainer_id
+    where tpc.plan_id = (
+      select tpd.plan_id from public.training_plan_days tpd where tpd.id = new.training_plan_day_id
+    )
+      and tpc.client_id = new.client_id
+  ) then
+    raise exception 'Az edzésterv nincs megosztva ezzel a klienssel.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists workouts_validate_training_plan_day on public.workouts;
+create trigger workouts_validate_training_plan_day
+before insert or update of training_plan_day_id, trainer_id, client_id on public.workouts
+for each row execute function public.validate_workout_training_plan_day();
+
+revoke all on function public.validate_workout_training_plan_day() from public, anon, authenticated;
+
+create or replace function public.save_training_plan(plan_payload jsonb)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+  target_plan_id uuid;
+  title_value text;
+  description_value text;
+  public_value boolean;
+  client_ids_value jsonb;
+  days_value jsonb;
+  day_value jsonb;
+  exercise_value jsonb;
+  day_id uuid;
+  payload_day_id uuid;
+  kept_day_ids uuid[] := array[]::uuid[];
+  day_number_value integer := 0;
+  exercise_position integer;
+  requested_client_count integer;
+  distinct_client_count integer;
+  sets_value integer;
+  rest_value integer;
+  day_title text;
+  day_notes text;
+begin
+  if actor_id is null or public.current_role() is distinct from 'trainer' then
+    raise exception 'Edzéstervet csak bejelentkezett edző hozhat létre vagy módosíthat.';
+  end if;
+  if coalesce(jsonb_typeof(plan_payload), '') <> 'object' then
+    raise exception 'Érvénytelen edzésterv-adatok.';
+  end if;
+
+  title_value := trim(coalesce(plan_payload->>'title', ''));
+  description_value := coalesce(plan_payload->>'description', '');
+  public_value := coalesce((plan_payload->>'isPublic')::boolean, false);
+  client_ids_value := coalesce(plan_payload->'clientIds', '[]'::jsonb);
+  days_value := plan_payload->'days';
+
+  if char_length(title_value) not between 1 and 120 then
+    raise exception 'Az edzésterv neve 1 és 120 karakter közötti legyen.';
+  end if;
+  if char_length(description_value) > 2000 then
+    raise exception 'A leírás legfeljebb 2000 karakter lehet.';
+  end if;
+  if coalesce(jsonb_typeof(client_ids_value), '') <> 'array' then
+    raise exception 'Érvénytelen edzésterv-megosztási lista.';
+  end if;
+  if public_value and jsonb_array_length(client_ids_value) > 0 then
+    raise exception 'Publikus edzéstervnél nem szükséges külön klienseket kijelölni.';
+  end if;
+  if coalesce(jsonb_typeof(days_value), '') <> 'array' then
+    raise exception 'Érvénytelen edzésnaplista.';
+  end if;
+  if jsonb_array_length(days_value) not between 1 and 30 then
+    raise exception 'Az edzésterv 1 és 30 közötti edzésnapot tartalmazzon.';
+  end if;
+
+  select count(*), count(distinct value)
+  into requested_client_count, distinct_client_count
+  from jsonb_array_elements_text(client_ids_value);
+  if requested_client_count <> distinct_client_count then
+    raise exception 'Egy kliens nem szerepelhet többször a megosztási listában.';
+  end if;
+  if exists (
+    select 1
+    from jsonb_array_elements_text(client_ids_value) requested(client_id)
+    where not exists (
+      select 1 from public.client_trainers ct
+      where ct.client_id = requested.client_id::uuid and ct.trainer_id = actor_id
+    )
+  ) then
+    raise exception 'Csak a hozzád rendelt kliensekkel oszthatod meg az edzéstervet.';
+  end if;
+
+  if plan_payload->>'id' is null or plan_payload->>'id' = '' then
+    insert into public.training_plans (trainer_id, title, description, is_public)
+    values (actor_id, title_value, description_value, public_value)
+    returning id into target_plan_id;
+  else
+    target_plan_id := (plan_payload->>'id')::uuid;
+    update public.training_plans
+    set title = title_value,
+        description = description_value,
+        is_public = public_value,
+        updated_at = now()
+    where id = target_plan_id and trainer_id = actor_id;
+    if not found then
+      raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a módosításához.';
+    end if;
+  end if;
+
+  delete from public.training_plan_clients where training_plan_clients.plan_id = target_plan_id;
+  delete from public.training_plan_exercises tpe
+  using public.training_plan_days tpd
+  where tpe.day_id = tpd.id and tpd.plan_id = target_plan_id;
+
+  insert into public.training_plan_clients (plan_id, client_id)
+  select target_plan_id, value::uuid
+  from jsonb_array_elements_text(client_ids_value);
+
+  for day_value in select value from jsonb_array_elements(days_value) loop
+    day_number_value := day_number_value + 1;
+    day_id := null;
+    day_title := trim(coalesce(day_value->>'title', ''));
+    day_notes := coalesce(day_value->>'notes', '');
+    if char_length(day_title) not between 1 and 120 or char_length(day_notes) > 1000 then
+      raise exception 'Minden edzésnap neve legyen 1 és 120 karakter közötti, a megjegyzés legfeljebb 1000 karakter.';
+    end if;
+    if coalesce(jsonb_typeof(day_value->'exercises'), '') <> 'array' then
+      raise exception 'Érvénytelen gyakorlatlista.';
+    end if;
+    if jsonb_array_length(day_value->'exercises') not between 1 and 30 then
+      raise exception 'Minden edzésnaphoz 1 és 30 közötti gyakorlatot adj meg.';
+    end if;
+
+    payload_day_id := null;
+    if coalesce(day_value->>'id', '') <> '' then
+      begin
+        payload_day_id := (day_value->>'id')::uuid;
+      exception when invalid_text_representation then
+        payload_day_id := null;
+      end;
+    end if;
+    if payload_day_id is not null then
+      update public.training_plan_days
+      set day_number = day_number_value, title = day_title, notes = day_notes
+      where id = payload_day_id and plan_id = target_plan_id
+      returning id into day_id;
+    end if;
+    if day_id is null then
+      insert into public.training_plan_days (plan_id, day_number, title, notes)
+      values (target_plan_id, day_number_value, day_title, day_notes)
+      returning id into day_id;
+    end if;
+    kept_day_ids := array_append(kept_day_ids, day_id);
+
+    exercise_position := 0;
+    for exercise_value in select value from jsonb_array_elements(day_value->'exercises') loop
+      exercise_position := exercise_position + 1;
+      begin
+        sets_value := (exercise_value->>'sets')::integer;
+        rest_value := nullif(exercise_value->>'restSeconds', '')::integer;
+      exception when invalid_text_representation then
+        raise exception 'A sorozatok és a pihenőidő egész szám legyen.';
+      end;
+      if char_length(trim(coalesce(exercise_value->>'name', ''))) not between 1 and 120
+        or sets_value is null
+        or sets_value not between 1 and 30
+        or char_length(trim(coalesce(exercise_value->>'reps', ''))) not between 1 and 60
+        or (rest_value is not null and rest_value not between 0 and 1800)
+        or char_length(coalesce(exercise_value->>'notes', '')) > 1000 then
+        raise exception 'Ellenőrizd a gyakorlat nevét, sorozatait, ismétléseit, pihenőidejét és megjegyzését.';
+      end if;
+
+      insert into public.training_plan_exercises (
+        day_id, position, name, sets, reps, rest_seconds, notes
+      )
+      values (
+        day_id,
+        exercise_position,
+        trim(exercise_value->>'name'),
+        sets_value,
+        trim(exercise_value->>'reps'),
+        rest_value,
+        coalesce(exercise_value->>'notes', '')
+      );
+    end loop;
+  end loop;
+
+  delete from public.training_plan_days
+  where plan_id = target_plan_id and not (id = any(kept_day_ids));
+
+  return target_plan_id;
+end;
+$$;
+
+create or replace function public.delete_training_plan(plan_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if auth.uid() is null or public.current_role() is distinct from 'trainer' then
+    raise exception 'Edzéstervet csak bejelentkezett edző törölhet.';
+  end if;
+  delete from public.training_plans
+  where id = $1 and trainer_id = auth.uid();
+  if not found then
+    raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a törléséhez.';
+  end if;
+end;
+$$;
+
+revoke all on function public.save_training_plan(jsonb) from public, anon;
+revoke all on function public.delete_training_plan(uuid) from public, anon;
+grant execute on function public.save_training_plan(jsonb) to authenticated;
+grant execute on function public.delete_training_plan(uuid) to authenticated;
