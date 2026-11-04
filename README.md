@@ -25,6 +25,7 @@ Első verziós klienskezelő személyi edzők számára.
 - Edző által kezdeményezett klienskapcsolat, amelyet a kliens hagy jóvá vagy utasít el
 - Kétoldalú, alkalmazáson belüli értesítések a kérésekről és a döntésekről
 - Supabase PostgreSQL adattárolás és Supabase Auth, helyi fallbackkel fejlesztéshez
+- Bejelentkezett felhasználók számára külön menüpontból elérhető, letölthető felhasználói kézikönyv PDF
 
 ## Adatbázis: Supabase PostgreSQL
 
@@ -55,7 +56,7 @@ Az Edge Function a `SUPABASE_SERVICE_ROLE_KEY` értéket csak szerveroldalon has
 
 ## Vercel-bemutató telepítés
 
-Az alkalmazás Vercelre GitHub-projektként telepíthető. A build csak a böngészőnek szánt alkalmazásfájlokat teszi a `dist` könyvtárba; a SQL-séma, dokumentáció és Edge Function nem kerül a nyilvános statikus fájlok közé. A Vercel `/api/runtime-config` függvénye a projekt beállításaiban megadott `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékből állítja elő a klienskonfigurációt. Ezek a böngészőben látható nyilvános Supabase-beállítások, nem titkok; a `service_role` kulcsot soha ne add meg ezek helyett.
+Az alkalmazás Vercelre GitHub-projektként telepíthető. A build a böngészőnek szánt alkalmazásfájlokat és a felhasználói kézikönyv PDF-et teszi a `dist` könyvtárba; a SQL-séma, további dokumentáció és Edge Function nem kerül a nyilvános statikus fájlok közé. A Vercel `/api/runtime-config` függvénye a projekt beállításaiban megadott `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékből állítja elő a klienskonfigurációt. Ezek a böngészőben látható nyilvános Supabase-beállítások, nem titkok; a `service_role` kulcsot soha ne add meg ezek helyett.
 
 1. Importáld a GitHub-repozitóriumot Vercelbe, a projekt gyökere maradjon a repository gyökere, a framework pedig **Other**.
 2. A Vercel **Settings → Environment Variables** részében add meg a `SUPABASE_URL` és `SUPABASE_ANON_KEY` értékeket a staging Supabase-projekt publikus URL-jével és anon/publishable kulcsával, legalább a **Preview** és **Production** környezetre.

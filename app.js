@@ -81,6 +81,7 @@ function routeForCurrentState() {
   const user = currentUser();
   if (!user) return "/";
   if (user.role === "admin") {
+    if (currentView === "guide") return "/admin/guide";
     if (currentView === "home") return "/admin/home";
     if (currentView === "overview") return "/admin/overview";
     if (currentView === "calendar") return "/admin/calendar";
@@ -94,6 +95,7 @@ function routeForCurrentState() {
     return "/admin/settings";
   }
   if (user.role === "trainer") {
+    if (currentView === "guide") return "/coach/guide";
     if (currentView === "home" || currentView === "trainer-home") return "/coach/home";
     if (currentView === "clients") return "/coach/clients";
     if (currentView === "calendar") return "/coach/calendar";
@@ -103,6 +105,7 @@ function routeForCurrentState() {
     if (currentView === "notifications") return "/coach/notifications";
     return "/coach/settings";
   }
+  if (currentView === "guide") return "/client/guide";
   if (currentView === "home" || currentView === "profile") return "/client";
   if (currentView === "calendar") return "/client/calendar";
   if (currentView === "connections") return "/client/connections";
@@ -140,7 +143,8 @@ function restoreRouteFromUrl() {
   selectedCoachId = null;
 
   if (user.role === "admin") {
-    if (segments[0] === "admin" && segments[1] === "home") currentView = "home";
+    if (segments[0] === "admin" && segments[1] === "guide") currentView = "guide";
+    else if (segments[0] === "admin" && segments[1] === "home") currentView = "home";
     else if (segments[0] === "admin" && segments[1] === "overview") currentView = "overview";
     else if (segments[0] === "admin" && segments[1] === "calendar") currentView = "calendar";
     else if (segments[0] === "admin" && segments[1] === "clients" && segments[2]) {
@@ -156,7 +160,8 @@ function restoreRouteFromUrl() {
     } else if (segments[0] === "admin" && segments[1] === "coach-profiles") currentView = "coach-profiles";
     else if (segments[0] === "admin") currentView = segments[1] === "settings" ? "settings" : "overview";
   } else if (user.role === "trainer") {
-    if (segments[0] === "coach" && segments[1] === "home") currentView = "home";
+    if (segments[0] === "coach" && segments[1] === "guide") currentView = "guide";
+    else if (segments[0] === "coach" && segments[1] === "home") currentView = "home";
     else if (segments[0] === "coach" && segments[1] === "calendar") currentView = "calendar";
     else if (segments[0] === "coach" && segments[1] === "profile") currentView = "coach-profile";
     else if (segments[0] === "coach" && segments[1] === "connections") currentView = "connections";
@@ -166,7 +171,8 @@ function restoreRouteFromUrl() {
       currentView = "client-detail";
       selectedClientId = segments[2];
     } else if (segments[0] === "coach" && segments[1] === "clients") currentView = "clients";
-  } else if (segments[0] === "client" && segments[1] === "calendar") currentView = "calendar";
+  } else if (segments[0] === "client" && segments[1] === "guide") currentView = "guide";
+  else if (segments[0] === "client" && segments[1] === "calendar") currentView = "calendar";
   else if (segments[0] === "client" && segments[1] === "connections") currentView = "connections";
   else if (segments[0] === "client" && segments[1] === "notifications") currentView = "notifications";
   else if (segments[0] === "client" && segments[1] === "settings") currentView = "settings";
@@ -604,7 +610,7 @@ function renderAuth() {
 function renderTrainerApplicationStatus(user) {
   const rejected = user.trainerApplicationStatus === "rejected";
   const emailConfirmed = user.emailConfirmed !== false;
-  return `<main class="auth-shell"><section class="auth-art"><div class="brand">Rutin<span>Napló</span></div><div><h1>${rejected ? "Köszönjük a jelentkezésed." : "A jelentkezésed megérkezett."}</h1><p>${rejected ? "Az adminisztrátor most nem hagyta jóvá az edzői hozzáférést." : "Az edzői munkatér az adminisztrátori elbírálásig nem érhető el."}</p></div><div class="art-footer">RutinNapló · Edzői jelentkezés</div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">${rejected ? "Jelentkezés lezárva" : "Elbírálás folyamatban"}</div><h2>${rejected ? "A jelentkezésedet elutasítottuk" : "Az adminisztrátori döntésre vársz"}</h2><p>${rejected ? "Ha úgy gondolod, hogy tévedés történt, vedd fel a kapcsolatot az alkalmazás üzemeltetőjével." : `${emailConfirmed ? "Az e-mail-címed megerősítve." : "Erősítsd meg a regisztrációkor megadott e-mail-címet."} Az adminisztrátor ellenőrzi a jelentkezésedet, és jóváhagyás esetén aktiválja az edzői fiókot.`}</p><div class="legal-status" role="status">${rejected ? "Az edzői funkciókhoz nem férsz hozzá. Új jelentkezéshez fordulj az üzemeltetőhöz." : `Jelentkező: ${escapeHtml(user.name)} · Szakterület: ${escapeHtml(user.specialty || "Nincs megadva")}. Jóváhagyásig nem férsz hozzá kliens- vagy edzői munkatérhez.`}</div><div class="auth-actions"><button class="btn btn-ghost" id="logout">Kijelentkezés</button><button class="btn btn-danger" id="delete-account">Fiók törlése</button></div></div></section></main>`;
+  return `<main class="auth-shell"><section class="auth-art"><div class="brand">Rutin<span>Napló</span></div><div><h1>${rejected ? "Köszönjük a jelentkezésed." : "A jelentkezésed megérkezett."}</h1><p>${rejected ? "Az adminisztrátor most nem hagyta jóvá az edzői hozzáférést." : "Az edzői munkatér az adminisztrátori elbírálásig nem érhető el."}</p></div><div class="art-footer">RutinNapló · Edzői jelentkezés</div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">${rejected ? "Jelentkezés lezárva" : "Elbírálás folyamatban"}</div><h2>${rejected ? "A jelentkezésedet elutasítottuk" : "Az adminisztrátori döntésre vársz"}</h2><p>${rejected ? "Ha úgy gondolod, hogy tévedés történt, vedd fel a kapcsolatot az alkalmazás üzemeltetőjével." : `${emailConfirmed ? "Az e-mail-címed megerősítve." : "Erősítsd meg a regisztrációkor megadott e-mail-címet."} Az adminisztrátor ellenőrzi a jelentkezésedet, és jóváhagyás esetén aktiválja az edzői fiókot.`}</p><div class="legal-status" role="status">${rejected ? "Az edzői funkciókhoz nem férsz hozzá. Új jelentkezéshez fordulj az üzemeltetőhöz." : `Jelentkező: ${escapeHtml(user.name)} · Szakterület: ${escapeHtml(user.specialty || "Nincs megadva")}. Jóváhagyásig nem férsz hozzá kliens- vagy edzői munkatérhez.`}</div><div class="auth-actions"><a class="btn btn-ghost" href="/RutinNaplo_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Felhasználói kézikönyv</a><button class="btn btn-ghost" id="logout">Kijelentkezés</button><button class="btn btn-danger" id="delete-account">Fiók törlése</button></div></div></section></main>`;
 }
 
 function pendingTrainerApplications() {
@@ -624,19 +630,25 @@ function renderTrainerApplications() {
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzői jelentkezések</div><h1>Edzői jelentkezések</h1><p>E-mail-megerősítés után hagyd jóvá vagy utasítsd el az edzői hozzáférést.</p></div></div><section class="panel">${applications.length ? applications.map((application) => `<div class="connection-row"><div><strong>${escapeHtml(application.full_name)}</strong><p>${escapeHtml(application.email || "Nincs e-mail-cím")} · ${escapeHtml(application.specialty || "Nincs megadva szakterület")}</p><small>${application.created_at ? `Jelentkezett: ${escapeHtml(new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(application.created_at)))}` : ""}${application.emailConfirmed ? " · E-mail megerősítve" : " · E-mail-megerősítésre vár"}</small></div><button class="btn btn-teal" data-trainer-application="approved" data-user-id="${escapeHtml(application.id)}" ${application.emailConfirmed ? "" : "disabled"}>Jóváhagyás</button><button class="btn btn-ghost" data-trainer-application="rejected" data-user-id="${escapeHtml(application.id)}">Elutasítás</button></div>`).join("") : `<div class="empty-state">Nincs elbírálásra váró edzői jelentkezés.</div>`}</section>`;
 }
 
+function renderUserGuide() {
+  return `<div class="topbar"><div><div class="eyebrow">Súgó</div><h1>Felhasználói kézikönyv</h1><p>A RutinNapló funkcióinak és szerepköreinek útmutatója.</p></div></div><section class="panel guide-panel"><h2>Olvasd el vagy töltsd le a kézikönyvet</h2><p class="settings-help">A PDF fejezetenként ismerteti az adminisztrátori, edzői és kliensfunkciókat, képernyőképekkel és példákkal.</p><div class="topbar-actions"><a class="btn btn-ghost" href="/RutinNaplo_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Megnyitás új lapon</a><a class="btn btn-teal" href="/RutinNaplo_felhasznaloi_kezikonyv.pdf" download="RutinNaplo_felhasznaloi_kezikonyv.pdf">PDF letöltése</a></div></section>`;
+}
+
 function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
   const navigation = isAdmin
-    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button>`
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
     : isTrainer
-      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button>`
-      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button>`;
-  const workspace = isAdmin
-    ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
-    : isTrainer
-      ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderTrainerContent(user)
-      : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
+      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`
+      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "notifications" ? "active" : ""}" data-view="notifications">Értesítések</button><button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button><button class="nav-btn ${currentView === "guide" ? "active" : ""}" data-view="guide">Felhasználói kézikönyv</button>`;
+  const workspace = currentView === "guide"
+    ? renderUserGuide()
+    : isAdmin
+      ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
+      : isTrainer
+        ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderTrainerContent(user)
+        : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
   return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">Rutin<span>Napló</span></div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderNotificationPreview(user)}${workspace}${renderLegalLinks()}</section></main>`;
 }
 

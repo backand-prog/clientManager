@@ -15,3 +15,8 @@ await mkdir(outputDirectory, { recursive: true });
 for (const file of staticFiles) {
   await cp(new URL(`../${file}`, import.meta.url), new URL(file, outputDirectory));
 }
+
+await cp(
+  new URL("../RutinNaplo_felhasznaloi_kezikonyv.pdf", import.meta.url),
+  new URL("RutinNaplo_felhasznaloi_kezikonyv.pdf", outputDirectory)
+);
