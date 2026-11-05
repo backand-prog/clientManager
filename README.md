@@ -16,16 +16,18 @@ Első verziós klienskezelő személyi edzők számára.
 - A következő edzés automatikusan a legkorábbi jövőbeli, beütemezett alkalomból jelenik meg
 - Havi edzésnaptár napválasztással; az adminisztrátorok és edzők a kliensekhez ütemezhetnek, a kliensek a saját edzéseiket tekinthetik át
 - Admin dashboard heti, havi és éves edzésstatisztikával, teljesített/lemondott edzések grafikonjával és legutóbbi edzésekkel
-- Edző által meghirdethető, férőhelykorlátos csoportos edzések; a kapcsolt kliensek a naptárból vagy a kezdőlapról jelentkezhetnek, illetve a kezdésig leiratkozhatnak
+- Edző által meghirdethető, szerkeszthető és lemondható, férőhelykorlátos csoportos edzések; a kapcsolt kliensek a naptárból vagy a kezdőlapról jelentkezhetnek, illetve a kezdésig leiratkozhatnak
+- Edzéslemondáskor az érintett fél (kliens vagy edző) automatikus értesítést kap; csoportos edzés lemondásakor az összes jelentkező, leiratkozáskor az edző kap értesítést
+- Olvasatlan értesítések száma piros jelvényen az Értesítések menüponton
 - Edzők által készíthető, több edzésnapos tervek gyakorlatokkal, sorozat-, ismétlés- és pihenőadatokkal; megosztás kiválasztott kapcsolt kliensekkel vagy minden bejelentkezett felhasználóval
-- Kereshető alapgyakorlat-lista az edzéstervekben és az edzések típusánál; egyedi gyakorlatnév is megadható
+- Kereshető alapgyakorlat-lista az edzéstervekben; az edzések típusánál edzéskategóriák (pl. Kardio, Súlyzós edzés, CrossFit) közül lehet választani, és egyedi megnevezés is megadható
 - Egyéni edzés létrehozásakor vagy szerkesztésekor opcionálisan kiválasztható egy, a kliens számára elérhető edzéstervnap
 - Egyéni, edző nélküli edzések naplózása
 - Kliens saját profil- és fejlődésnézete; nyilvános, 18+ kliensregisztráció
 - Edzői jelentkezés e-mail-megerősítéssel, adminisztrátori elbírálással és jóváhagyásig korlátozott hozzáféréssel
 - Kezdőlap szerepkörhöz igazított áttekintéssel, külön kliens- és edzői beállításokkal
 - Külön kapcsolati és értesítési oldalak, olvasatlan értesítések előnézetével
-- Szerkeszthető edzői bemutatkozás szakterülettel és legfeljebb 5 képpel
+- Szerkeszthető edzői bemutatkozás szakterülettel, elérhetőségekkel (telefon, e-mail), edzéshelyszínnel, vállalt idősávokkal és legfeljebb 5 képpel
 - Bejelentkezett kliensek megnyithatják az edzői profilokat, megtekinthetik a bemutatkozást és a képeket, majd kapcsolódási kérést küldhetnek
 - Az adminisztrátor külön menüpontban áttekintheti az edzők közzétett profiljait és képeit
 - Kliens-edző kapcsolódási kérések regisztrált e-mail-cím alapján, jóváhagyással vagy elutasítással

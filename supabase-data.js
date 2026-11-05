@@ -106,6 +106,10 @@
         name: profile.display_name,
         specialty: profile.specialty || "",
         bio: profile.bio || "",
+        phone: profile.phone || "",
+        contactEmail: profile.contact_email || "",
+        location: profile.location || "",
+        availability: profile.availability || "",
         photos: (signedResult.data || []).map((photo) => ({ path: photo.path, url: photo.signedUrl }))
       };
     }));
@@ -280,6 +284,19 @@
     if (error) throw error;
   }
 
+  async function updateGroupWorkout(workoutId, workout) {
+    if (!enabled) return;
+    const result = await client.rpc("update_group_workout", {
+      workout_id: workoutId,
+      workout_title: workout.title,
+      workout_description: workout.description || "",
+      workout_starts_at: workout.startsAt,
+      workout_duration_minutes: workout.duration,
+      workout_capacity: workout.capacity
+    });
+    if (result.error) throw result.error;
+  }
+
   async function joinGroupWorkout(workoutId) {
     if (!enabled) return;
     const result = await client.rpc("join_group_workout", { workout_id: workoutId });
@@ -322,9 +339,17 @@
     if (result.error) throw result.error;
   }
 
-  async function saveCoachProfile(specialty, bio, photoPaths) {
+  async function saveCoachProfile(specialty, bio, photoPaths, extras = {}) {
     if (!enabled) return;
-    const result = await client.rpc("save_coach_profile", { profile_specialty: specialty, profile_bio: bio, profile_photo_paths: photoPaths });
+    const result = await client.rpc("save_coach_profile", {
+      profile_specialty: specialty,
+      profile_bio: bio,
+      profile_photo_paths: photoPaths,
+      profile_phone: extras.phone || "",
+      profile_contact_email: extras.contactEmail || "",
+      profile_location: extras.location || "",
+      profile_availability: extras.availability || ""
+    });
     if (result.error) throw result.error;
   }
 
@@ -385,5 +410,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, saveTrainingPlan, deleteTrainingPlan, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, updateGroupWorkout, saveTrainingPlan, deleteTrainingPlan, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();

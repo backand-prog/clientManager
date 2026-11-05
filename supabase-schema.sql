@@ -230,12 +230,21 @@ where status = 'pending';
 create table if not exists public.connection_notifications (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references public.profiles(id) on delete cascade,
-  request_id uuid not null references public.connection_requests(id) on delete cascade,
-  kind text not null check (kind in ('request_received', 'request_sent', 'request_approved', 'request_declined')),
+  request_id uuid references public.connection_requests(id) on delete cascade,
+  kind text not null check (kind in ('request_received', 'request_sent', 'request_approved', 'request_declined', 'workout_cancelled', 'group_workout_cancelled', 'group_workout_left')),
   message text not null,
   created_at timestamptz not null default now(),
   read_at timestamptz
 );
+
+alter table public.connection_notifications
+  alter column request_id drop not null;
+
+alter table public.connection_notifications
+  drop constraint if exists connection_notifications_kind_check;
+alter table public.connection_notifications
+  add constraint connection_notifications_kind_check
+  check (kind in ('request_received', 'request_sent', 'request_approved', 'request_declined', 'workout_cancelled', 'group_workout_cancelled', 'group_workout_left'));
 
 create index if not exists connection_notifications_user_idx on public.connection_notifications (user_id, created_at desc);
 
@@ -254,15 +263,64 @@ using (user_id = auth.uid());
 
 grant select on public.connection_requests, public.connection_notifications to authenticated;
 
+create or replace function public.notify_workout_cancelled()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+  client_name text;
+  trainer_name text;
+  when_label text;
+begin
+  if new.status <> 'Lemondva' or old.status is not distinct from 'Lemondva' then
+    return new;
+  end if;
+
+  select p.full_name into client_name from public.profiles p where p.id = new.client_id;
+  select p.full_name into trainer_name from public.profiles p where p.id = new.trainer_id;
+  when_label := to_char(new.workout_date, 'YYYY.MM.DD.') || ' ' || to_char(new.workout_time, 'HH24:MI');
+
+  if actor_id is distinct from new.client_id then
+    insert into public.connection_notifications (user_id, request_id, kind, message)
+    values (new.client_id, null, 'workout_cancelled', coalesce(trainer_name, 'Az edződ') || ' lemondta a ' || when_label || ' időpontú edzésedet (' || new.workout_type || ').');
+  end if;
+  if new.trainer_id is not null and actor_id is distinct from new.trainer_id then
+    insert into public.connection_notifications (user_id, request_id, kind, message)
+    values (new.trainer_id, null, 'workout_cancelled', coalesce(client_name, 'A kliensed') || ' lemondta a ' || when_label || ' időpontú edzést (' || new.workout_type || ').');
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists workouts_notify_cancelled on public.workouts;
+create trigger workouts_notify_cancelled
+after update of status on public.workouts
+for each row execute function public.notify_workout_cancelled();
+
+revoke all on function public.notify_workout_cancelled() from public, anon, authenticated;
+
 create table if not exists public.coach_public_profiles (
   id uuid primary key references public.profiles(id) on delete cascade,
   display_name text not null,
   specialty text not null,
   bio text not null check (char_length(bio) <= 2000),
+  phone text not null default '' check (char_length(phone) <= 40),
+  contact_email text not null default '' check (char_length(contact_email) <= 254),
+  location text not null default '' check (char_length(location) <= 160),
+  availability text not null default '' check (char_length(availability) <= 300),
   photo_paths text[] not null default '{}',
   updated_at timestamptz not null default now(),
   check (cardinality(photo_paths) <= 5)
 );
+
+alter table public.coach_public_profiles
+  add column if not exists phone text not null default '',
+  add column if not exists contact_email text not null default '',
+  add column if not exists location text not null default '',
+  add column if not exists availability text not null default '';
 
 alter table public.coach_public_profiles enable row level security;
 
@@ -273,7 +331,17 @@ using (public.current_role() in ('client', 'trainer', 'admin'));
 
 grant select on public.coach_public_profiles to authenticated;
 
-create or replace function public.save_coach_profile(profile_specialty text, profile_bio text, profile_photo_paths text[])
+drop function if exists public.save_coach_profile(text, text, text[]);
+
+create or replace function public.save_coach_profile(
+  profile_specialty text,
+  profile_bio text,
+  profile_photo_paths text[],
+  profile_phone text default '',
+  profile_contact_email text default '',
+  profile_location text default '',
+  profile_availability text default ''
+)
 returns void
 language plpgsql
 security definer
@@ -299,6 +367,19 @@ begin
   if length(trim(coalesce(profile_bio, ''))) = 0 or length(profile_bio) > 2000 then
     raise exception 'A bemutatkozás legyen 1 és 2000 karakter között.';
   end if;
+  if length(coalesce(profile_phone, '')) > 40 then
+    raise exception 'A telefonszám legfeljebb 40 karakter lehet.';
+  end if;
+  if length(coalesce(profile_contact_email, '')) > 254
+    or (length(trim(coalesce(profile_contact_email, ''))) > 0 and trim(profile_contact_email) !~ '^[^@\s]+@[^@\s]+\.[^@\s]+$') then
+    raise exception 'Adj meg egy érvényes kapcsolati e-mail-címet.';
+  end if;
+  if length(coalesce(profile_location, '')) > 160 then
+    raise exception 'A helyszín legfeljebb 160 karakter lehet.';
+  end if;
+  if length(coalesce(profile_availability, '')) > 300 then
+    raise exception 'Az idősávok leírása legfeljebb 300 karakter lehet.';
+  end if;
   if cardinality(safe_photo_paths) > 5 then
     raise exception 'Legfeljebb 5 kép tölthető fel.';
   end if;
@@ -313,19 +394,23 @@ begin
   set specialty = trim(profile_specialty)
   where id = auth.uid();
 
-  insert into public.coach_public_profiles (id, display_name, specialty, bio, photo_paths, updated_at)
-  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), safe_photo_paths, now())
+  insert into public.coach_public_profiles (id, display_name, specialty, bio, phone, contact_email, location, availability, photo_paths, updated_at)
+  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), trim(coalesce(profile_phone, '')), trim(coalesce(profile_contact_email, '')), trim(coalesce(profile_location, '')), trim(coalesce(profile_availability, '')), safe_photo_paths, now())
   on conflict (id) do update
   set display_name = excluded.display_name,
       specialty = excluded.specialty,
       bio = excluded.bio,
+      phone = excluded.phone,
+      contact_email = excluded.contact_email,
+      location = excluded.location,
+      availability = excluded.availability,
       photo_paths = excluded.photo_paths,
       updated_at = excluded.updated_at;
 end;
 $$;
 
-revoke all on function public.save_coach_profile(text, text, text[]) from public;
-grant execute on function public.save_coach_profile(text, text, text[]) to authenticated;
+revoke all on function public.save_coach_profile(text, text, text[], text, text, text, text) from public;
+grant execute on function public.save_coach_profile(text, text, text[], text, text, text, text) to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('coach-profile-images', 'coach-profile-images', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])
@@ -465,8 +550,8 @@ set search_path = ''
 as $$
 declare
   request_row public.connection_requests%rowtype;
-  client_id uuid;
-  trainer_id uuid;
+  v_client_id uuid;
+  v_trainer_id uuid;
   decision_message text;
   notification_kind text;
 begin
@@ -492,14 +577,14 @@ begin
 
   if decision = 'approved' then
     if request_row.requester_role = 'client' then
-      client_id := request_row.requester_id;
-      trainer_id := request_row.recipient_id;
+      v_client_id := request_row.requester_id;
+      v_trainer_id := request_row.recipient_id;
     else
-      client_id := request_row.recipient_id;
-      trainer_id := request_row.requester_id;
+      v_client_id := request_row.recipient_id;
+      v_trainer_id := request_row.requester_id;
     end if;
     insert into public.client_trainers (client_id, trainer_id)
-    values (client_id, trainer_id)
+    values (v_client_id, v_trainer_id)
     on conflict (client_id, trainer_id) do nothing;
     decision_message := 'jóváhagyta';
     notification_kind := 'request_approved';
@@ -749,6 +834,7 @@ set search_path = ''
 as $$
 declare
   workout_row public.group_workouts%rowtype;
+  client_name text;
 begin
   if auth.uid() is null or public.current_role() <> 'client' then
     raise exception 'Csak bejelentkezett kliens iratkozhat le.';
@@ -762,6 +848,11 @@ begin
   end if;
   delete from public.group_workout_registrations
   where group_workout_id = workout_id and client_id = auth.uid();
+  if found then
+    select p.full_name into client_name from public.profiles p where p.id = auth.uid();
+    insert into public.connection_notifications (user_id, request_id, kind, message)
+    values (workout_row.trainer_id, null, 'group_workout_left', coalesce(client_name, 'Egy kliensed') || ' leiratkozott a(z) „' || workout_row.title || '” csoportos edzésről.');
+  end if;
   return workout_id;
 end;
 $$;
@@ -772,16 +863,95 @@ language plpgsql
 security definer
 set search_path = ''
 as $$
+declare
+  workout_row public.group_workouts%rowtype;
+  trainer_name text;
 begin
   if auth.uid() is null or public.current_role() <> 'trainer' then
     raise exception 'Csoportos edzést csak edző mondhat le.';
   end if;
-  update public.group_workouts
-  set cancelled_at = coalesce(cancelled_at, now())
-  where id = workout_id and trainer_id = auth.uid();
+  select * into workout_row
+  from public.group_workouts
+  where id = workout_id and trainer_id = auth.uid()
+  for update;
   if not found then
     raise exception 'A csoportos edzés nem található, vagy nem a te edzésed.';
   end if;
+  if workout_row.cancelled_at is not null then
+    return workout_id;
+  end if;
+
+  update public.group_workouts
+  set cancelled_at = now()
+  where id = workout_id;
+
+  select p.full_name into trainer_name from public.profiles p where p.id = auth.uid();
+  insert into public.connection_notifications (user_id, request_id, kind, message)
+  select gwr.client_id, null, 'group_workout_cancelled',
+    coalesce(trainer_name, 'Az edződ') || ' lemondta a(z) „' || workout_row.title || '” csoportos edzést ('
+    || to_char(workout_row.starts_at at time zone 'Europe/Budapest', 'YYYY.MM.DD. HH24:MI') || ').'
+  from public.group_workout_registrations gwr
+  where gwr.group_workout_id = workout_id;
+  return workout_id;
+end;
+$$;
+
+create or replace function public.update_group_workout(
+  workout_id uuid,
+  workout_title text,
+  workout_description text,
+  workout_starts_at timestamptz,
+  workout_duration_minutes integer,
+  workout_capacity integer
+)
+returns uuid
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  workout_row public.group_workouts%rowtype;
+  registration_count integer;
+begin
+  if auth.uid() is null or public.current_role() <> 'trainer' then
+    raise exception 'Csoportos edzést csak edző módosíthat.';
+  end if;
+  select * into workout_row
+  from public.group_workouts
+  where id = workout_id and trainer_id = auth.uid()
+  for update;
+  if not found then
+    raise exception 'A csoportos edzés nem található, vagy nem a te edzésed.';
+  end if;
+  if workout_row.cancelled_at is not null then
+    raise exception 'A lemondott edzés már nem szerkeszthető.';
+  end if;
+  if char_length(trim(coalesce(workout_title, ''))) not between 1 and 120 then
+    raise exception 'Az edzés neve 1 és 120 karakter közötti legyen.';
+  end if;
+  if char_length(coalesce(workout_description, '')) > 2000 then
+    raise exception 'A leírás legfeljebb 2000 karakter lehet.';
+  end if;
+  if workout_starts_at is null or workout_starts_at <= now() then
+    raise exception 'A csoportos edzés kezdése jövőbeli időpont legyen.';
+  end if;
+  if workout_duration_minutes not between 1 and 480 then
+    raise exception 'Az időtartam 1 és 480 perc közötti legyen.';
+  end if;
+  select count(*) into registration_count
+  from public.group_workout_registrations
+  where group_workout_id = workout_id;
+  if workout_capacity is null or workout_capacity < greatest(2, registration_count) or workout_capacity > 100 then
+    raise exception 'A létszám a jelentkezettek száma és 100 fő között lehet.';
+  end if;
+
+  update public.group_workouts
+  set title = trim(workout_title),
+      description = coalesce(workout_description, ''),
+      starts_at = workout_starts_at,
+      duration_minutes = workout_duration_minutes,
+      capacity = workout_capacity
+  where id = workout_id;
   return workout_id;
 end;
 $$;
@@ -791,11 +961,13 @@ revoke all on function public.create_group_workout(text, text, timestamptz, inte
 revoke all on function public.join_group_workout(uuid) from public;
 revoke all on function public.leave_group_workout(uuid) from public;
 revoke all on function public.cancel_group_workout(uuid) from public;
+revoke all on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer) from public;
 grant execute on function public.get_group_workouts() to authenticated;
 grant execute on function public.create_group_workout(text, text, timestamptz, integer, integer) to authenticated;
 grant execute on function public.join_group_workout(uuid) to authenticated;
 grant execute on function public.leave_group_workout(uuid) to authenticated;
 grant execute on function public.cancel_group_workout(uuid) to authenticated;
+grant execute on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer) to authenticated;
 
 create table if not exists public.training_plans (
   id uuid primary key default gen_random_uuid(),

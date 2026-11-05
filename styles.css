@@ -78,6 +78,7 @@ button { cursor: pointer; }
 .sidebar .brand { padding: 0 12px 44px; }
 .nav-label { color: #72909d; text-transform: uppercase; letter-spacing: .1em; font-size: .67rem; font-weight: 700; padding: 0 12px 10px; }
 .nav-btn { width: 100%; text-align: left; border: 0; color: #b8d0d7; background: transparent; padding: 12px; border-radius: 9px; margin-bottom: 3px; font-weight: 600; }
+.nav-badge { display: inline-grid; place-items: center; min-width: 19px; height: 19px; margin-left: 8px; padding: 0 5px; border-radius: 999px; background: #e05252; color: #fff; font-size: .68rem; font-weight: 800; vertical-align: 1px; }
 .nav-btn:hover, .nav-btn.active { color: var(--white); background: rgba(46,181,163,.15); }
 .nav-btn.active { box-shadow: inset 3px 0 0 #48d6b3; }
 .sidebar-spacer { flex: 1; }
@@ -209,6 +210,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .connection-center .search-row input { min-width: 0; flex: 1; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; }
 .coach-profile-editor { max-width: 850px; }
 .coach-profile-editor .field small { display: block; color: var(--muted); font-size: .75rem; margin-top: 6px; }
+.coach-profile-section { border: 1px solid var(--line); border-radius: 10px; padding: 16px 18px 6px; margin: 0 0 17px; }
+.coach-profile-section legend { color: var(--navy); font-size: .82rem; font-weight: 700; padding: 0 8px; }
+.coach-profile-section > small { display: block; color: var(--muted); font-size: .75rem; margin: -6px 0 12px; }
+.coach-contact-meta { margin-bottom: 18px; }
+.session-row-actions { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .coach-profile-editor input[type="file"] { padding: 10px; }
 .coach-directory { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
 .coach-card { min-width: 0; }
@@ -250,7 +256,8 @@ tbody tr:last-child td { border-bottom: 0; }
 .guide-panel { max-width: 760px; }
 .guide-panel h2 { margin-bottom: 8px; }
 .guide-panel > p { margin: 0 0 20px; }
-.privacy-warning { color: #68490f; background: #fff7e8; border-left: 3px solid var(--gold); padding: 10px 12px; font-size: .78rem; line-height: 1.45; }
+.privacy-warning { display: block; color: #68490f; background: #fff7e8; border-left: 3px solid var(--gold); padding: 10px 12px; font-size: .78rem; line-height: 1.45; }
+.field .privacy-warning { margin-top: 8px; }
 .local-demo-warning { margin-top: 18px; }
 .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8,29,45,.55); z-index: 9; }
 .modal { width: min(510px, 100%); max-height: 90vh; overflow-y: auto; background: var(--white); border-radius: 9px; padding: 25px; }
