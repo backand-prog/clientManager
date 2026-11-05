@@ -28,6 +28,7 @@
       duration: workout.duration_minutes,
       capacity: workout.capacity,
       participantCount: Number(workout.participant_count) || 0,
+      participantNames: Array.isArray(workout.participant_names) ? workout.participant_names : [],
       isRegistered: Boolean(workout.is_registered),
       cancelledAt: workout.cancelled_at
     };

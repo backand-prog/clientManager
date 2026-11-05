@@ -16,7 +16,7 @@ Első verziós klienskezelő személyi edzők számára.
 - A következő edzés automatikusan a legkorábbi jövőbeli, beütemezett alkalomból jelenik meg
 - Havi edzésnaptár napválasztással; az adminisztrátorok és edzők a kliensekhez ütemezhetnek, a kliensek a saját edzéseiket tekinthetik át
 - Admin dashboard heti, havi és éves edzésstatisztikával, teljesített/lemondott edzések grafikonjával és legutóbbi edzésekkel
-- Edző által meghirdethető, szerkeszthető és lemondható, férőhelykorlátos csoportos edzések; a kapcsolt kliensek a naptárból vagy a kezdőlapról jelentkezhetnek, illetve a kezdésig leiratkozhatnak
+- Edző által meghirdethető, szerkeszthető és lemondható, férőhelykorlátos csoportos edzések; a kapcsolt kliensek a naptárból vagy a kezdőlapról jelentkezhetnek, illetve a kezdésig leiratkozhatnak; az edző látja a jelentkezettek névsorát
 - Edzéslemondáskor az érintett fél (kliens vagy edző) automatikus értesítést kap; csoportos edzés lemondásakor az összes jelentkező, leiratkozáskor az edző kap értesítést
 - Olvasatlan értesítések száma piros jelvényen az Értesítések menüponton
 - Edzők által készíthető, több edzésnapos tervek gyakorlatokkal, sorozat-, ismétlés- és pihenőadatokkal; megosztás kiválasztott kapcsolt kliensekkel vagy minden bejelentkezett felhasználóval

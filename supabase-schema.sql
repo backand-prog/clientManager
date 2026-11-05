@@ -684,6 +684,8 @@ grant select on public.group_workouts, public.group_workout_registrations to aut
 grant insert (trainer_id, title, description, starts_at, duration_minutes, capacity)
 on public.group_workouts to authenticated;
 
+drop function if exists public.get_group_workouts();
+
 create or replace function public.get_group_workouts()
 returns table (
   id uuid,
@@ -696,7 +698,8 @@ returns table (
   capacity integer,
   participant_count bigint,
   is_registered boolean,
-  cancelled_at timestamptz
+  cancelled_at timestamptz,
+  participant_names text[]
 )
 language sql
 stable
@@ -717,7 +720,17 @@ as $$
       select 1 from public.group_workout_registrations gwr
       where gwr.group_workout_id = gw.id and gwr.client_id = auth.uid()
     ),
-    gw.cancelled_at
+    gw.cancelled_at,
+    case
+      when gw.trainer_id = auth.uid() or public.current_role() = 'admin' then
+        coalesce((
+          select array_agg(cp.full_name order by cp.full_name)
+          from public.group_workout_registrations gwr
+          join public.profiles cp on cp.id = gwr.client_id
+          where gwr.group_workout_id = gw.id
+        ), '{}')
+      else '{}'::text[]
+    end
   from public.group_workouts gw
   join public.profiles p on p.id = gw.trainer_id
   where auth.uid() is not null
