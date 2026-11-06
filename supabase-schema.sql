@@ -206,6 +206,62 @@ create trigger on_auth_user_created
 after insert on auth.users
 for each row execute procedure public.handle_new_user();
 
+create table if not exists public.subscriptions (
+  user_id uuid primary key references public.profiles(id) on delete cascade,
+  plan text not null default 'free' check (plan in ('free', 'pro', 'studio')),
+  status text not null default 'active' check (status in ('active', 'trialing', 'past_due', 'canceled')),
+  current_period_end timestamptz,
+  updated_at timestamptz not null default now()
+);
+
+alter table public.subscriptions enable row level security;
+
+drop policy if exists subscriptions_read on public.subscriptions;
+create policy subscriptions_read on public.subscriptions
+for select to authenticated
+using (user_id = auth.uid() or public.current_role() = 'admin');
+
+revoke all on public.subscriptions from public, anon, authenticated;
+grant select on public.subscriptions to authenticated;
+
+create or replace function public.current_plan()
+returns text
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce(
+    (select s.plan from public.subscriptions s
+     where s.user_id = auth.uid() and s.status in ('active', 'trialing')),
+    'free'
+  );
+$$;
+
+revoke all on function public.current_plan() from public, anon;
+grant execute on function public.current_plan() to authenticated;
+
+create or replace function public.handle_new_user_subscription()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into public.subscriptions (user_id, plan)
+  values (new.id, 'free')
+  on conflict (user_id) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_subscription_created on public.profiles;
+create trigger profiles_subscription_created
+after insert on public.profiles
+for each row execute function public.handle_new_user_subscription();
+
+revoke all on function public.handle_new_user_subscription() from public, anon, authenticated;
+
 create table if not exists public.connection_requests (
   id uuid primary key default gen_random_uuid(),
   requester_id uuid not null references public.profiles(id) on delete cascade,
@@ -583,6 +639,10 @@ begin
       v_client_id := request_row.recipient_id;
       v_trainer_id := request_row.requester_id;
     end if;
+    if (select s.plan from public.subscriptions s where s.user_id = v_trainer_id and s.status in ('active', 'trialing')) = 'free'
+      and (select count(*) from public.client_trainers ct where ct.trainer_id = v_trainer_id) >= 3 then
+      raise exception 'A Free csomag legfeljebb 3 aktív klienst enged. A további kliensekhez Pro csomag szükséges.';
+    end if;
     insert into public.client_trainers (client_id, trainer_id)
     values (v_client_id, v_trainer_id)
     on conflict (client_id, trainer_id) do nothing;
@@ -778,6 +838,9 @@ begin
   if workout_capacity not between 2 and 100 then
     raise exception 'A létszám 2 és 100 fő közötti legyen.';
   end if;
+  if public.current_plan() = 'free' and workout_capacity > 6 then
+    raise exception 'A Free csomagban a csoportos edzés legfeljebb 6 fős lehet. Nagyobb csoporthoz Pro csomag szükséges.';
+  end if;
 
   insert into public.group_workouts (trainer_id, title, description, starts_at, duration_minutes, capacity)
   values (auth.uid(), trim(workout_title), coalesce(workout_description, ''), workout_starts_at, workout_duration_minutes, workout_capacity)
@@ -956,6 +1019,9 @@ begin
   where group_workout_id = workout_id;
   if workout_capacity is null or workout_capacity < greatest(2, registration_count) or workout_capacity > 100 then
     raise exception 'A létszám a jelentkezettek száma és 100 fő között lehet.';
+  end if;
+  if public.current_plan() = 'free' and workout_capacity > 6 then
+    raise exception 'A Free csomagban a csoportos edzés legfeljebb 6 fős lehet. Nagyobb csoporthoz Pro csomag szükséges.';
   end if;
 
   update public.group_workouts
@@ -1237,6 +1303,15 @@ begin
   end if;
   if jsonb_array_length(days_value) not between 1 and 30 then
     raise exception 'Az edzésterv 1 és 30 közötti edzésnapot tartalmazzon.';
+  end if;
+  if public.current_plan() = 'free' then
+    if jsonb_array_length(days_value) > 3 then
+      raise exception 'A Free csomagban egy edzésterv legfeljebb 3 edzésnapot tartalmazhat. További napokhoz Pro csomag szükséges.';
+    end if;
+    if (plan_payload->>'id' is null or plan_payload->>'id' = '')
+      and (select count(*) from public.training_plans tp where tp.trainer_id = actor_id) >= 2 then
+      raise exception 'A Free csomagban legfeljebb 2 edzésterv készíthető. További tervekhez Pro csomag szükséges.';
+    end if;
   end if;
 
   select count(*), count(distinct value)

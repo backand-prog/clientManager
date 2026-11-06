@@ -304,6 +304,12 @@ function saveData() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
 }
 function currentUser() { return data.users.find((user) => user.id === session); }
+function currentPlan() { return data.subscription?.plan || "free"; }
+function planLabel(plan = currentPlan()) { return { free: "Free", pro: "Pro", studio: "Studio" }[plan] || "Free"; }
+function trainerClientCount(trainerId) { return data.users.filter((item) => item.role === "client" && (item.trainerIds || []).includes(trainerId)).length; }
+function openUpgradeModal(reason) {
+  openModal(`<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Csomag</div><h2>Frissítés Pro-ra</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><p>${escapeHtml(reason)}</p><p class="settings-help">A Pro csomag korlátlan klienst, edzéstervet és nagyobb csoportos edzéseket ad. Az online fizetés hamarosan érkezik; addig is az adminisztrátor tud csomagot váltani.</p><div style="display:flex;justify-content:flex-end;margin-top:18px"><button type="button" class="btn btn-dark" id="cancel-modal">Rendben</button></div></div></div>`);
+}
 function findLocalLoginUser(email, password) {
   const user = data.users.find((item) => item.email.toLowerCase() === email && item.password === password);
   if (user) return user;
@@ -607,6 +613,7 @@ function respondLocalConnectionRequest(actor, requestId, decision) {
     const client = data.users.find((item) => item.id === (actor.role === "client" ? actor.id : request.requesterId));
     const trainerId = actor.role === "trainer" ? actor.id : request.requesterId;
     if (!client || client.role !== "client") throw new Error("A kliensfiók nem található.");
+    if (actor.role === "trainer" && currentPlan() === "free" && trainerClientCount(actor.id) >= 3) throw new Error("A Free csomag legfeljebb 3 aktív klienst enged.");
     client.trainerIds ||= [];
     if (!client.trainerIds.includes(trainerId)) client.trainerIds.push(trainerId);
   }
@@ -626,6 +633,7 @@ async function refreshRemote() {
       session = remoteData.sessionId;
       localStorage.removeItem(SESSION_KEY);
       if (currentView === "administrators") data.adminAccounts = await window.remoteStore.listAdminAccounts();
+      if (currentView === "subscriptions") data.adminSubscriptions = await window.remoteStore.listSubscriptions();
       render();
     }
   } catch (error) { toast(`Adatbázis-hiba: ${error.message}`); }
@@ -669,6 +677,7 @@ async function initializeRemote() {
       localStorage.removeItem(SESSION_KEY);
       restoreRouteFromUrl();
       if (currentView === "administrators") data.adminAccounts = await window.remoteStore.listAdminAccounts();
+      if (currentView === "subscriptions") data.adminSubscriptions = await window.remoteStore.listSubscriptions();
       render();
     } else if (currentUser() && isLocalDevelopmentHost()) {
       remoteMode = false;
@@ -835,6 +844,18 @@ function renderAdminAccounts() {
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Adminisztrátorok</div><h1>Adminjogosultságok</h1><p>Regisztrált, megerősített kliensfiókok adminisztrátorrá emelése.</p></div></div><section class="panel"><div class="legal-status" role="note">Csak megerősített e-mail-című fióknak adhatsz adminjogot. Az adminisztrátorok azonos jogosultságúak; csak megbízható fióknak add meg ezt a szerepkört.</div>${accountContent}</section>`;
 }
 
+function renderAdminSubscriptions() {
+  const subscriptions = remoteMode ? data.adminSubscriptions : null;
+  const rows = (subscriptions || []).map((sub) => `<tr><td><div class="client-cell"><div class="avatar">${initials(sub.name || "")}</div>${escapeHtml(sub.name || "Edző")}</div></td><td><span class="plan-badge plan-badge-${escapeHtml(sub.plan)}">${planLabel(sub.plan)}</span></td><td>${sub.status === "active" ? "Aktív" : escapeHtml(sub.status)}</td><td><select class="plan-select" data-set-plan-user="${escapeHtml(sub.id)}">${["free", "pro", "studio"].map((plan) => `<option value="${plan}" ${sub.plan === plan ? "selected" : ""}>${planLabel(plan)}</option>`).join("")}</select></td></tr>`).join("");
+  const content = !remoteMode
+    ? `<div class="empty-state">Az előfizetések kezelése csak Supabase-kapcsolattal érhető el.</div>`
+    : !subscriptions
+      ? `<div class="empty-state">Előfizetések betöltése…</div>`
+      : rows ? `<div class="table-wrap"><table><thead><tr><th>Edző</th><th>Csomag</th><th>Állapot</th><th>Csomag módosítása</th></tr></thead><tbody>${rows}</tbody></table></div>`
+        : `<div class="empty-state">Még nincs edzői fiók.</div>`;
+  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 3 kliens, csoportos edzés max 6 fő, 2 edzésterv (max 3 nap/terv). Pro és Studio: korlátlan. Az online fizetés hamarosan érkezik.</div>${content}</section>`;
+}
+
 function renderUserGuide() {
   return `<div class="topbar"><div><div class="eyebrow">Súgó</div><h1>Felhasználói kézikönyv</h1><p>A BackPlan funkcióinak és szerepköreinek útmutatója.</p></div></div><section class="panel guide-panel"><h2>Olvasd el vagy töltsd le a kézikönyvet</h2><p class="settings-help">A PDF fejezetenként ismerteti az adminisztrátori, edzői és kliensfunkciókat, képernyőképekkel és példákkal.</p><div class="topbar-actions"><a class="btn btn-ghost" href="/BackPlan_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Megnyitás új lapon</a><a class="btn btn-teal" href="/BackPlan_felhasznaloi_kezikonyv.pdf" download="BackPlan_felhasznaloi_kezikonyv.pdf">PDF letöltése</a></div></section>`;
 }
@@ -958,7 +979,7 @@ function renderDashboard(user) {
   const settingsBtn = `<button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button>`;
   const plansBtn = `<button class="nav-btn ${currentView === "training-plans" ? "active" : ""}" data-view="training-plans">Edzéstervek</button>`;
   const navigation = isAdmin
-    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
     : isTrainer
       ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
@@ -984,7 +1005,8 @@ function renderTrainerContent(trainer) {
 
 function renderTrainerClients(trainer) {
   const clients = data.users.filter((user) => user.role === "client" && (user.trainerIds || []).includes(trainer.id));
-  return `<div class="topbar"><div><div class="eyebrow">Edzői tér / Kliensek</div><h1>Klienseid</h1><p>Minden hozzád rendelt kliens és edzésük.</p></div></div><section class="panel">${renderClientTable(clients)}</section>`;
+  const planBadge = `<span class="plan-badge plan-badge-${currentPlan()}">${planLabel()} csomag${currentPlan() === "free" ? ` · ${clients.length}/3 kliens` : ""}</span>`;
+  return `<div class="topbar"><div><div class="eyebrow">Edzői tér / Kliensek</div><h1>Klienseid ${planBadge}</h1><p>Minden hozzád rendelt kliens és edzésük.</p></div></div><section class="panel">${renderClientTable(clients)}</section>`;
 }
 
 function renderAdminHome(admin) {
@@ -999,6 +1021,7 @@ function renderAdminContent() {
   if (currentView === "trainers") return renderTrainers();
   if (currentView === "trainer-applications") return renderTrainerApplications();
   if (currentView === "administrators") return renderAdminAccounts();
+  if (currentView === "subscriptions") return renderAdminSubscriptions();
   if (currentView === "coach-profiles") return renderAdminCoachProfiles();
   if (currentView === "coach-profile-review") return renderCoachProfileDetail();
   if (currentView === "client-detail") return renderEnhancedClientDetail(selectedClient());
@@ -1270,6 +1293,10 @@ function bindModalEvents() {
     if (!plan.days.length || plan.days.some((day) => !day.title || !day.exercises.length || day.exercises.some((exercise) => !exercise.name || !exercise.reps || !Number.isInteger(exercise.sets) || exercise.sets < 1 || exercise.sets > 30 || (exercise.restSeconds !== null && (!Number.isInteger(exercise.restSeconds) || exercise.restSeconds < 0 || exercise.restSeconds > 1800))))) {
       return toast("Adj meg minden edzésnaphoz legalább egy érvényes gyakorlatot, sorozatot és ismétlésszámot.");
     }
+    if (currentUser()?.role === "trainer" && currentPlan() === "free") {
+      if (plan.days.length > 3) return toast("A Free csomagban egy edzésterv legfeljebb 3 edzésnapot tartalmazhat.");
+      if (!plan.id && (data.trainingPlans || []).filter((item) => item.trainerId === currentUser().id).length >= 2) return toast("A Free csomagban legfeljebb 2 edzésterv készíthető.");
+    }
     const submit = form.querySelector('button[type="submit"]');
     submit.disabled = true;
     try {
@@ -1316,6 +1343,10 @@ function bindModalEvents() {
       duration: Number(values.duration),
       capacity: Number(values.capacity)
     };
+    if (currentUser()?.role === "trainer" && currentPlan() === "free" && workout.capacity > 6) {
+      toast("A Free csomagban a csoportos edzés legfeljebb 6 fős lehet.");
+      return;
+    }
     const submit = form.querySelector('button[type="submit"], button:not([type])');
     if (submit) submit.disabled = true;
     const editId = form.dataset.groupId || "";
@@ -1542,7 +1573,14 @@ function bindEvents() {
     navigateToView(button.dataset.view);
     if (button.dataset.view === "administrators") void loadAdminAccounts();
   }));
-  document.querySelector("#add-training-plan")?.addEventListener("click", () => openModal(renderTrainingPlanModal()));
+  document.querySelector("#add-training-plan")?.addEventListener("click", () => {
+    const user = currentUser();
+    if (user?.role === "trainer" && currentPlan() === "free" && (data.trainingPlans || []).filter((plan) => plan.trainerId === user.id).length >= 2) {
+      openUpgradeModal("A Free csomagban legfeljebb 2 edzésterv készíthető.");
+      return;
+    }
+    openModal(renderTrainingPlanModal());
+  });
   document.querySelectorAll("[data-edit-training-plan]").forEach((button) => button.addEventListener("click", () => {
     const plan = (data.trainingPlans || []).find((item) => item.id === button.dataset.editTrainingPlan && item.trainerId === currentUser()?.id);
     if (!plan) return toast("Az edzésterv nem érhető el vagy nincs szerkesztési jogosultságod.");
@@ -1628,6 +1666,20 @@ function bindEvents() {
     }
   }));
   document.querySelectorAll("[data-grant-admin]").forEach((button) => button.addEventListener("click", () => grantAdminRole(button.dataset.grantAdmin)));
+  document.querySelectorAll("[data-set-plan-user]").forEach((select) => select.addEventListener("change", async () => {
+    const userId = select.dataset.setPlanUser;
+    const plan = select.value;
+    select.disabled = true;
+    try {
+      await window.remoteStore.accountAdmin({ action: "set-plan", userId, plan });
+      data.adminSubscriptions = await window.remoteStore.listSubscriptions();
+      render();
+      toast(`A csomag frissítve: ${planLabel(plan)}.`);
+    } catch (error) {
+      toast(`Nem sikerült módosítani a csomagot: ${error.message}`);
+      select.disabled = false;
+    }
+  }));
   document.querySelectorAll("[data-trainer-application]").forEach((button) => button.addEventListener("click", async () => {
     const userId = button.dataset.userId;
     const decision = button.dataset.trainerApplication;

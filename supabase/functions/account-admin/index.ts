@@ -111,6 +111,52 @@ Deno.serve(async (request) => {
       return json({ accounts });
     }
 
+    if (body.action === "list-subscriptions") {
+      const { data: trainers, error: trainersError } = await adminClient
+        .from("profiles")
+        .select("id, full_name, created_at")
+        .eq("role", "trainer")
+        .order("created_at", { ascending: true });
+      if (trainersError) return json({ error: trainersError.message }, 500);
+      const { data: subs, error: subsError } = await adminClient
+        .from("subscriptions")
+        .select("user_id, plan, status, current_period_end");
+      if (subsError) return json({ error: subsError.message }, 500);
+      const subscriptions = (trainers || []).map((trainer) => {
+        const sub = (subs || []).find((item) => item.user_id === trainer.id);
+        return {
+          id: trainer.id,
+          name: trainer.full_name,
+          plan: sub?.plan || "free",
+          status: sub?.status || "active",
+          currentPeriodEnd: sub?.current_period_end || null
+        };
+      });
+      return json({ subscriptions });
+    }
+
+    if (body.action === "set-plan") {
+      if (typeof body.userId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.userId)) {
+        return json({ error: "Érvénytelen felhasználó." }, 400);
+      }
+      if (!["free", "pro", "studio"].includes(body.plan)) {
+        return json({ error: "Érvénytelen csomag." }, 400);
+      }
+      const { data: target, error: targetError } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("id", body.userId)
+        .eq("role", "trainer")
+        .maybeSingle();
+      if (targetError) return json({ error: targetError.message }, 500);
+      if (!target) return json({ error: "Csak edző csomagja módosítható." }, 400);
+      const { error: upsertError } = await adminClient
+        .from("subscriptions")
+        .upsert({ user_id: body.userId, plan: body.plan, status: "active", updated_at: new Date().toISOString() });
+      if (upsertError) return json({ error: upsertError.message }, 500);
+      return json({ ok: true });
+    }
+
     if (body.action === "grant-admin") {
       if (typeof body.userId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.userId)) {
         return json({ error: "Érvénytelen felhasználó." }, 400);

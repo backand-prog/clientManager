@@ -32,6 +32,7 @@ Első verziós klienskezelő személyi edzők számára.
 - Az adminisztrátor külön menüpontban áttekintheti az edzők közzétett profiljait és képeit
 - Kliens-edző kapcsolódási kérések regisztrált e-mail-cím alapján, jóváhagyással vagy elutasítással
 - Edző által kezdeményezett klienskapcsolat, amelyet a kliens hagy jóvá vagy utasít el
+- Edzői csomagok (Free/Pro/Studio): Free csomagban max 3 aktív kliens, csoportos edzés max 6 fővel, legfeljebb 2 edzésterv (tervenként max 3 edzésnap); a korlátokat a szerveroldali RPC-k kényszerítik ki, az admin az Előfizetések menüpontban válthat csomagot
 - Kétoldalú, alkalmazáson belüli értesítések a kérésekről és a döntésekről
 - Supabase PostgreSQL adattárolás és Supabase Auth, helyi fallbackkel fejlesztéshez
 - Bejelentkezett felhasználók számára külön menüpontból elérhető, letölthető felhasználói kézikönyv PDF

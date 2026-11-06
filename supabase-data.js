@@ -70,7 +70,7 @@
     if (error) throw error;
     const user = authData?.user;
     if (!user) return null;
-    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult] = await Promise.all([
+    const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult, subscriptionResult] = await Promise.all([
       client.from("profiles").select("*").order("created_at"),
       client.from("client_trainers").select("client_id, trainer_id"),
       client.from("workouts").select("*").order("workout_date", { ascending: false }),
@@ -80,7 +80,8 @@
       client.rpc("get_group_workouts"),
       client.from("training_plans")
         .select("*, training_plan_clients(client_id), training_plan_days(*, training_plan_exercises(*))")
-        .order("updated_at", { ascending: false })
+        .order("updated_at", { ascending: false }),
+      client.from("subscriptions").select("plan, status, current_period_end").eq("user_id", user.id).maybeSingle()
     ]);
     if (profilesResult.error) throw profilesResult.error;
     if (assignmentsResult.error) throw assignmentsResult.error;
@@ -90,6 +91,7 @@
     if (coachProfilesResult.error) throw coachProfilesResult.error;
     if (groupWorkoutsResult.error) throw groupWorkoutsResult.error;
     if (trainingPlansResult.error) throw trainingPlansResult.error;
+    if (subscriptionResult.error) throw subscriptionResult.error;
     const assignments = assignmentsResult.data || [];
     const workouts = workoutsResult.data || [];
     const profiles = profilesResult.data || [];
@@ -116,6 +118,11 @@
     }));
     return {
       sessionId: user.id,
+      subscription: {
+        plan: subscriptionResult.data?.plan || "free",
+        status: subscriptionResult.data?.status || "active",
+        currentPeriodEnd: subscriptionResult.data?.current_period_end || null
+      },
       users: profiles.map((profile) => {
         const ownWorkouts = workouts.filter((workout) => workout.client_id === profile.id).map(mapWorkout);
         return {
@@ -392,6 +399,12 @@
     return result.accounts || [];
   }
 
+  async function listSubscriptions() {
+    if (!enabled) return [];
+    const result = await accountAdmin({ action: "list-subscriptions" });
+    return result.subscriptions || [];
+  }
+
   async function requestPasswordReset(email) {
     if (!enabled) return null;
     const result = await client.auth.resetPasswordForEmail(email, { redirectTo: `${window.location.origin}/?password-reset=1` });
@@ -411,5 +424,5 @@
     if (result.error) throw result.error;
   }
 
-  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, updateGroupWorkout, saveTrainingPlan, deleteTrainingPlan, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, requestPasswordReset, onPasswordRecovery, updatePassword };
+  window.remoteStore = { enabled, load, exportMyData, signIn, signUp, updateProfile, updateEmail, updateAssignments, saveWorkout, createGroupWorkout, updateGroupWorkout, saveTrainingPlan, deleteTrainingPlan, joinGroupWorkout, leaveGroupWorkout, cancelGroupWorkout, createConnectionRequest, createCoachConnectionRequest, respondConnectionRequest, markConnectionNotificationsRead, saveCoachProfile, uploadCoachPhoto, deleteCoachPhotos, signOut, accountAdmin, listAdminAccounts, listSubscriptions, requestPasswordReset, onPasswordRecovery, updatePassword };
 })();
