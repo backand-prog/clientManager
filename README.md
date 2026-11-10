@@ -85,6 +85,28 @@ Az alkalmazás Vercelre GitHub-projektként telepíthető. A build a böngésző
 
 Az anon/publishable kulcs böngészőoldali nyilvánosságra hozása tervezett; az adatok védelmét a Supabase RLS adja. Staginghez külön Supabase-projektet használj, és abban ne tárolj éles személyes adatot.
 
+## Fizetés (Stripe) – környezeti változók
+
+A fizetés két Edge Functionből áll: `create-checkout-session` (JWT-hitelesített, a Stripe Checkoutot indítja) és `stripe-webhook` (a Stripe hívja, JWT nélkül). A számlázás jelenleg szimulált (`mockCreateInvoice`), Billingo / Számlázz.hu kulcs még nem kell. A teljes lista az [.env.example](./.env.example) fájlban van.
+
+| Hol | Változó | Megjegyzés |
+|---|---|---|
+| Vercel | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Nyilvános; a Stripe-kulcsokat ide soha ne add meg. |
+| Supabase secrets | `STRIPE_SECRET_KEY` | `sk_test_...` / `sk_live_...` |
+| Supabase secrets | `STRIPE_WEBHOOK_SECRET` | `whsec_...`, a Stripe webhook endpoint aláíró kulcsa |
+| Supabase secrets | `STRIPE_PRICE_PRO`, `STRIPE_PRICE_STUDIO` | A Stripe `price_...` azonosítók; az ár `plan` metadata értéke `pro` / `studio` |
+| Supabase secrets | `APP_URL` | A Vercel domain gyökere, záró `/` nélkül (a fizetés utáni visszairányításhoz) |
+
+A `SUPABASE_URL`, `SUPABASE_ANON_KEY` és `SUPABASE_SERVICE_ROLE_KEY` az Edge Functionök számára automatikusan elérhető.
+
+```
+supabase secrets set --env-file .env
+supabase functions deploy create-checkout-session
+supabase functions deploy stripe-webhook --no-verify-jwt
+```
+
+A Stripe webhook endpoint: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`, események: `checkout.session.completed`, `invoice.payment_succeeded`. A fizetés visszairányítása a `?checkout=success` paramétert használja; az alkalmazás ekkor értesítést jelenít meg, és frissíti a csomagot. A tesztmódú és az éles Stripe-kulcsok külön készletet alkotnak.
+
 ## Helyi futtatás
 
 Indíts egyszerű helyi HTTP-szervert a projekt mappájában (például `py -m http.server 8000`), majd nyisd meg a `http://localhost:8000` címet. Nincs szükség build lépésre. Az alkalmazás Supabase-konfiguráció nélkül nem működik, ezért a `supabase-config.js` beállítása kötelező.
