@@ -70,8 +70,6 @@ button { cursor: pointer; }
 .btn-danger { color: #a83c2b; border: 1px solid #f1c0b8; background: #fff6f4; }
 .auth-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 24px; }
 .text-button { color: var(--blue); background: none; border: 0; padding: 0; font-weight: 700; }
-.demo-box { background: var(--mint); border-left: 3px solid var(--teal); padding: 14px 16px; margin-top: 28px; font-size: .83rem; color: #49636a; }
-.demo-box strong { color: var(--navy); }
 
 .dashboard { min-height: 100vh; display: grid; grid-template-columns: 248px 1fr; }
 .sidebar { background: linear-gradient(165deg, #102a43 0%, #0c253a 66%, #0a3446 100%); color: var(--white); padding: 28px 20px; display: flex; flex-direction: column; overflow-y: auto; }
@@ -264,7 +262,6 @@ tbody tr:last-child td { border-bottom: 0; }
 .guide-panel > p { margin: 0 0 20px; }
 .privacy-warning { display: block; color: #68490f; background: #fff7e8; border-left: 3px solid var(--gold); padding: 10px 12px; font-size: .78rem; line-height: 1.45; }
 .field .privacy-warning { margin-top: 8px; }
-.local-demo-warning { margin-top: 18px; }
 .modal-backdrop { position: fixed; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(8,29,45,.55); z-index: 9; }
 .modal { width: min(510px, 100%); max-height: 90vh; overflow-y: auto; background: var(--white); border-radius: 9px; padding: 25px; }
 .modal-head { display: flex; justify-content: space-between; margin-bottom: 22px; }

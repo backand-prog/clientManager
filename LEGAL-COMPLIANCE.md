@@ -31,7 +31,6 @@ A jelenlegi alkalmazás egy tájékoztató sávot és részletes, alkalmazáson 
 Az alkalmazás leltára jelenleg:
 
 - Supabase Auth munkamenet: a Supabase JS kliens alapértelmezett `localStorage`-tárhelye; bejelentkezési munkamenethez. Lejárata a Supabase Auth beállításaitól függ; kijelentkezéskor törlődik.
-- Helyi tesztmód: `form-function-data` és `form-function-session` `localStorage` kulcsok, illetve `form-function-images` IndexedDB adatbázis. Csak `localhost`/`127.0.0.1` alatt; tesztadat és tesztkép céljára.
 - Navigációs hash (`#/...`): a nézet útvonala kerül az URL-be; nem cookie és nem hitelesítési token.
 - Az alkalmazáskód nem állít be saját HTTP-sütit és jelenleg nincs analitikai, hirdetési vagy közösségi követő.
 
@@ -58,7 +57,7 @@ Az alkalmazás Supabase JS könyvtárat tölt be a jsDelivr CDN-ről; emiatt a b
 - Az indulási terv egy 3–5 edzővel végzett zárt, ingyenes pilot, analitika és marketing nélkül. Későbbi monetizációs hipotézis az edzők előfizetése és a kliensek ingyenes hozzáférése; árak, csomagok és jogi feltételek még nincsenek meghatározva.
 - A felhasználó a Beállításokból letöltheti a saját fiókadatait JSON-fájlként, helyesbítheti adatait és kezdeményezheti fiókja törlését. A fióktörlés a coach-profil képeit is eltávolítja a privát tárhelyről.
 - A regisztrációs szerepkört az adatbázis nem fogadja el a felhasználó által megadott metaadatból. Edzői jelentkezésnél a profil csak függőben lévő kérelmet kap; az adminisztrátor csak megerősített e-mail-cím után, szerveroldali Edge Functionnel adhat edzői szerepkört.
-- A böngészős helyi demo csak `localhost`/`127.0.0.1` alatt használható; valódi személyes adatot ne írj be. Supabase-módban az alkalmazás nem másolja az adatbázis teljes tartalmát saját `localStorage`-kulcsba.
+- Az alkalmazás adatai kizárólag a Supabase projektben tárolódnak; az alkalmazás nem másolja az adatbázis tartalmát a böngésző `localStorage`-kulcsaiba.
 - Eltávolítottuk a Google Fonts hívásokat. Az alkalmazás jelenlegi kódja nem használ marketing/analitikai trackert; helyette tájékoztató sáv és részletes böngészős tárolóleltár érhető el. A sáv bezárása nem hozzájárulás.
 
 ## Élesítés előtt kötelezően kitöltendő / ellenőrizendő

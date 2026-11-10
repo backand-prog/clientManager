@@ -34,12 +34,12 @@ Első verziós klienskezelő személyi edzők számára.
 - Edző által kezdeményezett klienskapcsolat, amelyet a kliens hagy jóvá vagy utasít el
 - Edzői csomagok (Free/Pro/Studio): Free csomagban max 3 aktív kliens, csoportos edzés max 6 fővel, legfeljebb 2 edzésterv (tervenként max 3 edzésnap); a korlátokat a szerveroldali RPC-k kényszerítik ki, az admin az Előfizetések menüpontban válthat csomagot
 - Kétoldalú, alkalmazáson belüli értesítések a kérésekről és a döntésekről
-- Supabase PostgreSQL adattárolás és Supabase Auth, helyi fallbackkel fejlesztéshez
+- Supabase PostgreSQL adattárolás és Supabase Auth hitelesítés
 - Bejelentkezett felhasználók számára külön menüpontból elérhető, letölthető felhasználói kézikönyv PDF
 
 ## Adatbázis: Supabase PostgreSQL
 
-A projekt Supabase PostgreSQL adatbázist és Supabase Auth hitelesítést használ. A böngészős `localStorage`-os demo mód kizárólag helyi fejlesztői gépen (`localhost` vagy `127.0.0.1`) használható; éles vagy hálózaton megosztott hoston a Supabase hibája nem kapcsol át demo módra. Supabase-ból betöltött alkalmazásadatokat a kliens nem menti a demo `localStorage` kulcsába.
+A projekt Supabase PostgreSQL adatbázist és Supabase Auth hitelesítést használ. Az alkalmazásadatok kizárólag a Supabase projektben tárolódnak; a kliens nem ment alkalmazásadatot a böngésző `localStorage`-ába.
 
 Beállítás:
 
@@ -64,7 +64,7 @@ Az első tesztelési kör 18 éven felülieknek szól; kiskorúak bevonása kés
 
 A `supabase-schema.sql` újrafuttatása létrehozza az edzői jelentkezés állapotmezőjét, és lecseréli az Auth felhasználót létrehozó triggert: az önregisztráló fiók adatbázisbeli szerepköre mindig `client`; az edzői jelentkezők hozzáférése az elbírálásig le van tiltva. A felhasználó által küldött metadata nem adhat edzői jogosultságot. Az adminisztrátor az Edge Functionön keresztül bírálja el a megerősített e-mail-című jelentkezőket; jóváhagyáskor ez állítja be a `trainer` szerepkört. Meglévő projektnél futtasd le újra a teljes sémát, majd telepítsd újra az Edge Functiont (`supabase functions deploy account-admin`).
 
-A regisztrációs megerősítő és jelszó-visszaállító e-maileket a Supabase Auth küldi. A linkek az alkalmazás gyökér URL-jére irányítanak, hogy a Supabase kliens a hitelesítési tokeneket a hash-alapú útvonalkezelés mellett is feldolgozhassa. Engedélyezd ezt az URL-t a Supabase Authentication redirect allowlistjében. Valós kézbesítés teszteléséhez állíts be saját SMTP-szolgáltatót az Authentication e-mail beállításainál, és csak olyan e-mail-címet használj, amelynek postafiókjához hozzáférsz. A helyi demo mód nem küld e-mailt.
+A regisztrációs megerősítő és jelszó-visszaállító e-maileket a Supabase Auth küldi. A linkek az alkalmazás gyökér URL-jére irányítanak, hogy a Supabase kliens a hitelesítési tokeneket a hash-alapú útvonalkezelés mellett is feldolgozhassa. Engedélyezd ezt az URL-t a Supabase Authentication redirect allowlistjében. Valós kézbesítés teszteléséhez állíts be saját SMTP-szolgáltatót az Authentication e-mail beállításainál, és csak olyan e-mail-címet használj, amelynek postafiókjához hozzáférsz. Az e-mail-megerősítés és a visszaállítás a Supabase Auth-on keresztül működik.
 
 A `supabase-config.js` fájlt ne töltsd fel titkos kulcsokkal. Az anon kulcs kliensoldalon használható, a jogosultságokat az RLS szabályok védik.
 
@@ -87,22 +87,13 @@ Az anon/publishable kulcs böngészőoldali nyilvánosságra hozása tervezett; 
 
 ## Helyi futtatás
 
-Indíts egyszerű helyi HTTP-szervert a projekt mappájában (például `py -m http.server 8000`), majd nyisd meg a `http://localhost:8000` címet. Nincs szükség build lépésre. A `file://` megnyitás és a hálózaton megosztott host nem aktiválja a helyi demo módot.
+Indíts egyszerű helyi HTTP-szervert a projekt mappájában (például `py -m http.server 8000`), majd nyisd meg a `http://localhost:8000` címet. Nincs szükség build lépésre. Az alkalmazás Supabase-konfiguráció nélkül nem működik, ezért a `supabase-config.js` beállítása kötelező.
 
-Ha nincs Supabase-konfiguráció, vagy a Supabase nem érhető el az alkalmazás indulásakor, az alkalmazás helyi demo módot használ, de csak a fenti helyi hostokon. Ebben a módban az adatok csak az adott böngésző `localStorage` tárhelyére kerülnek. A demo-fiókok és jelszavak kizárólag helyi tesztadatok; ne használd őket éles telepítésben.
+Ha nincs Supabase-konfiguráció, vagy a Supabase nem érhető el, az alkalmazás nem tud adatot betölteni és bejelentkezni. Az adatok kizárólag a Supabase projektben tárolódnak.
 
-Helyi demo hozzáférések:
+Az alkalmazás az aktuális nézetet az URL-ben is jelzi, például `#/client/coaches` az edzőlistához, `#/client/coaches/trainer-1` egy edző profiljához, illetve `#/coach/calendar` az edzői naptárhoz. Így frissítéskor az oldal ugyanarra a nézetre tér vissza. A bejelentkezés a böngészőben megmarad; kijelentkezéshez használd a **Kijelentkezés** gombot.
 
-- Admin: `admin@formfunction.test` / `admin123`
-- Edző: `anna@formfunction.test` / `trainer123`
-- Kliens: `maya@example.com` / `client123`
-- Kliens: `sofia@example.com` / `client123`
-
-A kipróbáláshoz jelentkezz be Sofiaként, és küldj kérést az edző `anna@formfunction.test` címére; ezután jelentkezz be edzőként, és hagyd jóvá vagy utasítsd el a kérést. Az ellenkező irány kipróbálásához Anna küldjön kérést Sofia címére. Mindkét fiók a saját nézetében látja az értesítéseket. Helyi módban a kérések és értesítések ugyanabban a böngészőben maradnak meg.
-
-Az alkalmazás az aktuális nézetet az URL-ben is jelzi, például `#/client/coaches` az edzőlistához, `#/client/coaches/trainer-1` egy edző profiljához, illetve `#/coach/calendar` az edzői naptárhoz. Így frissítéskor az oldal ugyanarra a nézetre tér vissza. A helyi demo bejelentkezése szintén megmarad az adott böngészőben; kijelentkezéshez használd a **Kijelentkezés** gombot.
-
-Edzőként a **Bemutatkozásom** menüpontban szerkesztheted a profilodat és tölthetsz fel legfeljebb 5, egyenként legfeljebb 5 MB-os JPG/PNG/WebP képet. Supabase-módban a képek privát Storage bucketben tárolódnak, és csak hitelesített felhasználók láthatják őket. Helyi demo módban a képek az adott böngésző IndexedDB-tárhelyére kerülnek, ezért ugyanabban a böngészőben újratöltés és fiókváltás után is elérhetők; másik böngészőben vagy eszközön nem. Kliensként az **Edzők böngészése** menüpontban jelennek meg a közzétett profilok.
+Edzőként a **Bemutatkozásom** menüpontban szerkesztheted a profilodat és tölthetsz fel legfeljebb 5, egyenként legfeljebb 5 MB-os JPG/PNG/WebP képet. A képek privát Storage bucketben tárolódnak, és csak hitelesített felhasználók láthatják őket. Kliensként az **Edzők böngészése** menüpontban jelennek meg a közzétett profilok.
 
 ## Adatvédelem és jogi státusz
 

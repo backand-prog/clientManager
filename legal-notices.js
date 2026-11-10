@@ -94,8 +94,6 @@ window.LEGAL_NOTICES = Object.freeze({
           heading: "Tárolók és céljuk",
           paragraphs: [
             "Supabase Auth (localStorage): a hitelesítési munkamenet fenntartása. A Supabase JavaScript kliens a projekt munkamenet-tokenjét a böngésző helyi tárhelyén tárolja; a kulcs a Supabase projekt azonosítójához kötött. A token kijelentkezéskor törlődik, illetve a böngésző helyi adatainak törlésével távolítható el. A lejárat és megújítás a Supabase Auth projektbeállításaitól függ.",
-            "Helyi demo (localStorage: form-function-data és form-function-session): kizárólag localhost vagy 127.0.0.1 alatt, tesztadatok és helyi bejelentkezés fenntartására. A böngésző tárhelyének törléséig marad meg; kijelentkezés a munkamenet-azonosítót törli. Ne adj meg benne valódi személyes vagy egészségügyi adatot.",
-            "Helyi demó képei (IndexedDB: form-function-images): a helyben feltöltött tesztképek tárolására. Csak helyi demó módban használatos; a képek a felhasználó általi törlésig vagy a böngésző webhelyadatainak törléséig maradhatnak meg.",
             "Az alkalmazás a böngésző URL-jének hash részében is tárolhatja a navigációs útvonalat (például #/client); ez nem cookie és nem hitelesítési adat."
           ]
         },
@@ -109,7 +107,7 @@ window.LEGAL_NOTICES = Object.freeze({
         {
           heading: "Böngészős tárolók kezelése",
           paragraphs: [
-            "A bejelentkezési adatok törléséhez jelentkezz ki; a helyi demo adatai a böngésző webhelyadatainak törlésével is eltávolíthatók. A tárhely törlése kijelentkeztethet, illetve a helyi tesztadatokat és feltöltött képeket végleg eltávolíthatja. A böngésző beállításaiban a sütik és webhelyadatok külön-külön is kezelhetők.",
+            "A bejelentkezési adatok törléséhez jelentkezz ki. A tárhely törlése kijelentkeztethet. A böngészőben a sütik és webhelyadatok a böngésző beállításaiban külön-külön is kezelhetők.",
             "A szükséges tárolók letiltása megakadályozhatja a bejelentkezést és az alkalmazás működését. E tájékoztató és a süti-/tárhely-beállítási hivatkozás minden alkalmazásnézetből elérhető."
           ]
         }
