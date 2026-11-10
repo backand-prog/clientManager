@@ -214,6 +214,16 @@ create table if not exists public.subscriptions (
   updated_at timestamptz not null default now()
 );
 
+-- Stripe azonosítók (nullable: az ingyenes fiókoknak nincs Stripe-adatuk)
+alter table public.subscriptions
+  add column if not exists stripe_customer_id text,
+  add column if not exists stripe_subscription_id text;
+
+create unique index if not exists subscriptions_stripe_customer_id_key
+  on public.subscriptions (stripe_customer_id) where stripe_customer_id is not null;
+create unique index if not exists subscriptions_stripe_subscription_id_key
+  on public.subscriptions (stripe_subscription_id) where stripe_subscription_id is not null;
+
 alter table public.subscriptions enable row level security;
 
 drop policy if exists subscriptions_read on public.subscriptions;
