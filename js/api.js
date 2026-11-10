@@ -370,6 +370,19 @@ export async function listAdminAccounts() {
   return result.accounts || [];
 }
 
+export async function startCheckout(plan) {
+  if (!enabled) throw new Error("Az online fizetés csak csatlakoztatott módban érhető el.");
+  const result = await client.functions.invoke("create-checkout-session", { body: { plan } });
+  if (result.error) {
+    // A függvény hibaüzenete a válasz törzsében érkezik.
+    const detail = await result.error.context?.json?.().catch(() => null);
+    throw new Error(detail?.error || result.error.message);
+  }
+  if (result.data?.error) throw new Error(result.data.error);
+  if (!result.data?.url) throw new Error("Nem érkezett fizetési hivatkozás.");
+  return result.data.url;
+}
+
 export async function listSubscriptions() {
   if (!enabled) return [];
   const result = await accountAdmin({ action: "list-subscriptions" });

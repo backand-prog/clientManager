@@ -28,7 +28,7 @@ import { deleteTrainer, grantAdminRole, loadAdminAccounts, renderAdminContent, r
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
 import { renderClientTable, renderEnhancedClientDetail, renderTrainerClients } from "./views/clients.js";
 import { renderCoachDirectory, renderCoachProfileDetail, renderCoachProfileEditor } from "./views/coaches.js";
-import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderSettings, renderTrainerContent, renderUserGuide } from "./views/general.js";
+import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderSettings, renderSubscription, renderTrainerContent, renderUserGuide } from "./views/general.js";
 import { renderTrainingPlanModal, renderTrainingPlans } from "./views/trainingPlans.js";
 import { registerRuntime } from "./runtime.js";
 
@@ -100,6 +100,7 @@ function routeForCurrentState() {
     if (currentView === "client-detail") return `/coach/clients/${encodeURIComponent(selectedClientId || "")}`;
     if (currentView === "connections") return "/coach/connections";
     if (currentView === "notifications") return "/coach/notifications";
+    if (currentView === "subscription") return "/coach/subscription";
     return "/coach/settings";
   }
   if (currentView === "guide") return "/client/guide";
@@ -168,6 +169,7 @@ function restoreRouteFromUrl() {
     else if (segments[0] === "coach" && segments[1] === "connections") setCurrentView("connections");
     else if (segments[0] === "coach" && segments[1] === "notifications") setCurrentView("notifications");
     else if (segments[0] === "coach" && segments[1] === "settings") setCurrentView("settings");
+    else if (segments[0] === "coach" && segments[1] === "subscription") setCurrentView("subscription");
     else if (segments[0] === "coach" && segments[1] === "clients" && segments[2]) {
       setCurrentView("client-detail");
       setSelectedClientId(segments[2]);
@@ -203,6 +205,26 @@ async function refreshRemote() {
   } catch (error) { toast(`Adatbázis-hiba: ${error.message}`); }
 }
 
+async function handleCheckoutReturn() {
+  const params = new URLSearchParams(window.location.search);
+  const result = params.get("checkout");
+  if (!result) return;
+  params.delete("checkout");
+  const query = params.toString();
+  window.history.replaceState(null, "", `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`);
+  if (result !== "success") { toast("A fizetés megszakadt, a csomagod nem változott."); return; }
+
+  toast("Sikeres fizetés! Az előfizetésed frissítése folyamatban…");
+  const before = currentPlan();
+  // A Stripe webhook a visszairányítás után pár másodperccel érkezhet meg.
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    await refreshRemote();
+    if (currentPlan() !== before) { toast(`Az előfizetésed aktív: ${planLabel()} csomag.`); return; }
+    await new Promise((resolve) => setTimeout(resolve, 2000));
+  }
+  toast("A fizetés megtörtént, a csomag frissítése kis időt vehet igénybe. Később frissítsd az oldalt.");
+}
+
 async function initializeRemote() {
   if (!remoteMode) {
     setSession(null);
@@ -220,6 +242,7 @@ async function initializeRemote() {
       if (currentView === "administrators") data.adminAccounts = await api.listAdminAccounts();
       if (currentView === "subscriptions") data.adminSubscriptions = await api.listSubscriptions();
       render();
+      await handleCheckoutReturn();
     } else {
       setSession(null);
       render();
@@ -326,7 +349,7 @@ function renderDashboard(user) {
   const navigation = isAdmin
     ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
     : isTrainer
-      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
+      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "subscription" ? "active" : ""}" data-view="subscription">Előfizetés</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
   const workspace = currentView === "guide"
     ? renderUserGuide()
@@ -335,7 +358,7 @@ function renderDashboard(user) {
     : isAdmin
       ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
       : isTrainer
-        ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderTrainerContent(user)
+        ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : currentView === "subscription" ? renderSubscription() : renderTrainerContent(user)
         : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
   return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">Back<span>Plan</span></div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderNotificationPreview(user)}${workspace}${renderLegalLinks()}</section></main>`;
 }
@@ -465,6 +488,17 @@ function bindEvents() {
     }
   }));
   document.querySelectorAll("[data-grant-admin]").forEach((button) => button.addEventListener("click", () => grantAdminRole(button.dataset.grantAdmin)));
+  document.querySelectorAll("[data-checkout-plan]").forEach((button) => button.addEventListener("click", async () => {
+    const plan = button.dataset.checkoutPlan;
+    if (plan === currentPlan()) return;
+    button.disabled = true;
+    try {
+      window.location.assign(await api.startCheckout(plan));
+    } catch (error) {
+      button.disabled = false;
+      toast(`Nem sikerült elindítani a fizetést: ${error.message}`);
+    }
+  }));
   document.querySelectorAll("[data-set-plan-user]").forEach((select) => select.addEventListener("change", async () => {
     const userId = select.dataset.setPlanUser;
     const plan = select.value;

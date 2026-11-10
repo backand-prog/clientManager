@@ -1,7 +1,28 @@
 import {
   data
 } from "../state.js";
-import { escapeHtml, groupWorkoutDateLabel, groupWorkoutTime, initials, nextSessionLabel, trainerName, upcomingGroupWorkouts, upcomingWorkouts, workoutStats } from "../helpers.js";
+import { currentPlan, escapeHtml, groupWorkoutDateLabel, groupWorkoutTime, initials, nextSessionLabel, planLabel, trainerName, upcomingGroupWorkouts, upcomingWorkouts, workoutStats } from "../helpers.js";
+
+const PAID_PLANS = [
+  { id: "pro", description: "Korlátlan kliens, edzésterv és nagyobb csoportos edzések." },
+  { id: "studio", description: "Minden Pro funkció stúdiók és nagyobb csapatok számára." }
+];
+
+export function renderSubscription() {
+  const current = currentPlan();
+  const subscription = data.subscription || {};
+  const isLive = ["active", "trialing"].includes(subscription.status);
+  const periodEnd = subscription.currentPeriodEnd
+    ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "long" }).format(new Date(subscription.currentPeriodEnd))
+    : "";
+  const cards = PAID_PLANS.map((plan) => {
+    const isCurrent = plan.id === current;
+    return `<div class="connection-row"><div><strong>${planLabel(plan.id)}</strong><p>${escapeHtml(plan.description)}</p></div>${isCurrent
+      ? `<span class="plan-badge plan-badge-${plan.id}">Aktuális csomag</span>`
+      : `<button class="btn btn-teal" data-checkout-plan="${plan.id}">Előfizetés</button>`}</div>`;
+  }).join("");
+  return `<div class="topbar"><div><div class="eyebrow">Fiók / Előfizetés</div><h1>Előfizetés</h1><p>Aktuális csomagod: <span class="plan-badge plan-badge-${current}">${planLabel(current)}</span>${isLive && periodEnd && current !== "free" ? ` · érvényes: ${escapeHtml(periodEnd)}` : ""}</p></div></div><section class="panel connection-center">${cards}</section>`;
+}
 
 export function renderConnectionCenter(user) {
   const requests = data.connectionRequests || [];
