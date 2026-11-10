@@ -74,8 +74,8 @@ Deno.serve(async (req) => {
         : { customer_email: user.email }),
       metadata: { user_id: user.id, plan },
       subscription_data: { metadata: { user_id: user.id, plan } },
-      success_url: `${appUrl}/#/coach/subscription`,
-      cancel_url: `${appUrl}/#/coach/subscription`
+      success_url: `${appUrl}/?checkout=success#/coach/subscription`,
+      cancel_url: `${appUrl}/?checkout=cancelled#/coach/subscription`
     });
     return json({ url: session.url });
   } catch (error) {
