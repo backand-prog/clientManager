@@ -35,6 +35,16 @@ alter table public.profiles
   add constraint profiles_trainer_application_status_check
   check (trainer_application_status in ('none', 'pending', 'approved', 'rejected'));
 
+-- Studio csomag: a stúdióvezető fiókjára mutat; kitöltve a felhasználó beosztott al-edző.
+alter table public.profiles
+  add column if not exists parent_studio_id uuid references public.profiles(id) on delete set null;
+alter table public.profiles
+  drop constraint if exists profiles_parent_studio_not_self;
+alter table public.profiles
+  add constraint profiles_parent_studio_not_self check (parent_studio_id is distinct from id);
+create index if not exists profiles_parent_studio_idx
+  on public.profiles (parent_studio_id) where parent_studio_id is not null;
+
 create or replace function public.prevent_last_admin_removal()
 returns trigger
 language plpgsql
@@ -129,6 +139,42 @@ alter table public.profiles enable row level security;
 alter table public.client_trainers enable row level security;
 alter table public.workouts enable row level security;
 
+-- Igaz, ha a hívó aktív Studio csomagú edző, és `member` az alá beosztott al-edző.
+-- plpgsql, hogy a később létrehozott subscriptions táblára való hivatkozás ne okozzon létrehozási hibát.
+create or replace function public.is_studio_head_of(member uuid)
+returns boolean
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  return member is not null
+    and public.current_role() = 'trainer'
+    and exists (
+      select 1 from public.profiles p
+      where p.id = member and p.parent_studio_id = auth.uid()
+    )
+    and exists (
+      select 1 from public.subscriptions s
+      where s.user_id = auth.uid() and s.plan = 'studio' and s.status in ('active', 'trialing')
+    );
+end;
+$$;
+
+-- Igaz, ha a kliens a hívó stúdió valamelyik al-edzőjéhez van rendelve.
+create or replace function public.is_studio_client(client uuid)
+returns boolean
+language sql stable security definer set search_path = public
+as $$
+  select exists (
+    select 1 from public.client_trainers ct
+    where ct.client_id = client and public.is_studio_head_of(ct.trainer_id)
+  );
+$$;
+
+revoke all on function public.is_studio_head_of(uuid) from public, anon;
+revoke all on function public.is_studio_client(uuid) from public, anon;
+grant execute on function public.is_studio_head_of(uuid) to authenticated;
+grant execute on function public.is_studio_client(uuid) to authenticated;
+
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles for select to authenticated
 using (
@@ -137,6 +183,8 @@ using (
   or (public.current_role() = 'trainer' and exists (
     select 1 from public.client_trainers ct where ct.client_id = profiles.id and ct.trainer_id = auth.uid()
   ))
+  or public.is_studio_head_of(id)
+  or public.is_studio_client(id)
 );
 
 drop policy if exists profiles_admin_write on public.profiles;
@@ -147,12 +195,21 @@ drop policy if exists profiles_self_update on public.profiles;
 create policy profiles_self_update on public.profiles for update to authenticated
 using (id = auth.uid()) with check (id = auth.uid());
 
+-- A vezető szerkesztheti az al-edzői és azok klienseinek profilját (csak az engedélyezett oszlopokat).
+drop policy if exists profiles_studio_update on public.profiles;
+create policy profiles_studio_update on public.profiles for update to authenticated
+using (public.is_studio_head_of(id) or public.is_studio_client(id))
+with check (public.is_studio_head_of(id) or public.is_studio_client(id));
+
 revoke update on public.profiles from public, anon, authenticated;
 grant update (full_name, specialty, goal, status, adherence, notes) on public.profiles to authenticated;
 
 drop policy if exists assignments_read on public.client_trainers;
 create policy assignments_read on public.client_trainers for select to authenticated
-using (client_id = auth.uid() or trainer_id = auth.uid() or public.current_role() = 'admin');
+using (
+  client_id = auth.uid() or trainer_id = auth.uid() or public.current_role() = 'admin'
+  or public.is_studio_head_of(trainer_id)
+);
 
 drop policy if exists assignments_admin_write on public.client_trainers;
 create policy assignments_admin_write on public.client_trainers for all to authenticated
@@ -160,7 +217,10 @@ using (public.current_role() = 'admin') with check (public.current_role() = 'adm
 
 drop policy if exists workouts_read on public.workouts;
 create policy workouts_read on public.workouts for select to authenticated
-using (client_id = auth.uid() or trainer_id = auth.uid() or public.is_assigned_trainer(client_id) or public.current_role() = 'admin');
+using (
+  client_id = auth.uid() or trainer_id = auth.uid() or public.is_assigned_trainer(client_id) or public.current_role() = 'admin'
+  or public.is_studio_head_of(trainer_id) or public.is_studio_client(client_id)
+);
 
 drop policy if exists workouts_write on public.workouts;
 create policy workouts_write on public.workouts for insert to authenticated
@@ -168,6 +228,10 @@ with check (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and public.is_assigned_trainer(client_id) and trainer_id = auth.uid())
+  or (
+    public.is_studio_head_of(trainer_id)
+    and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
+  )
 );
 
 drop policy if exists workouts_update on public.workouts;
@@ -176,11 +240,16 @@ using (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and trainer_id = auth.uid())
+  or public.is_studio_head_of(trainer_id)
 )
 with check (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and trainer_id = auth.uid())
+  or (
+    public.is_studio_head_of(trainer_id)
+    and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
+  )
 );
 
 create or replace function public.handle_new_user()
@@ -250,6 +319,23 @@ $$;
 
 revoke all on function public.current_plan() from public, anon;
 grant execute on function public.current_plan() to authenticated;
+
+-- Csomag-limitek egy helyen. NULL = korlátlan (Studio).
+create or replace function public.plan_limit(plan_name text, limit_kind text)
+returns integer
+language sql
+immutable
+set search_path = ''
+as $$
+  select case limit_kind
+    when 'clients' then case plan_name when 'free' then 5 when 'pro' then 30 else null end
+    when 'group_capacity' then case plan_name when 'free' then 8 when 'pro' then 20 else null end
+    when 'training_plans' then case plan_name when 'free' then 2 else null end
+  end;
+$$;
+
+revoke all on function public.plan_limit(text, text) from public, anon;
+grant execute on function public.plan_limit(text, text) to authenticated;
 
 create or replace function public.handle_new_user_subscription()
 returns trigger
@@ -618,6 +704,7 @@ declare
   request_row public.connection_requests%rowtype;
   v_client_id uuid;
   v_trainer_id uuid;
+  v_client_limit integer;
   decision_message text;
   notification_kind text;
 begin
@@ -649,9 +736,15 @@ begin
       v_client_id := request_row.recipient_id;
       v_trainer_id := request_row.requester_id;
     end if;
-    if (select s.plan from public.subscriptions s where s.user_id = v_trainer_id and s.status in ('active', 'trialing')) = 'free'
-      and (select count(*) from public.client_trainers ct where ct.trainer_id = v_trainer_id) >= 3 then
-      raise exception 'A Free csomag legfeljebb 3 aktív klienst enged. A további kliensekhez Pro csomag szükséges.';
+    -- Az edző csomagja számít (a döntést a kliens is hozhatja); előfizetés nélkül Free.
+    v_client_limit := public.plan_limit(
+      coalesce((select s.plan from public.subscriptions s where s.user_id = v_trainer_id and s.status in ('active', 'trialing')), 'free'),
+      'clients'
+    );
+    if v_client_limit is not null
+      and not exists (select 1 from public.client_trainers ct where ct.client_id = v_client_id and ct.trainer_id = v_trainer_id)
+      and (select count(*) from public.client_trainers ct where ct.trainer_id = v_trainer_id) >= v_client_limit then
+      raise exception 'A csomagod legfeljebb % aktív klienst enged. További kliensekhez magasabb csomag szükséges.', v_client_limit;
     end if;
     insert into public.client_trainers (client_id, trainer_id)
     values (v_client_id, v_trainer_id)
@@ -716,6 +809,20 @@ on public.group_workouts (trainer_id, starts_at);
 create index if not exists group_workout_registrations_client_idx
 on public.group_workout_registrations (client_id, group_workout_id);
 
+-- Studio csomag: helyszín és várólista.
+alter table public.group_workouts
+  add column if not exists location varchar(120);
+
+alter table public.group_workout_registrations
+  add column if not exists status text not null default 'registered';
+alter table public.group_workout_registrations
+  drop constraint if exists group_workout_registrations_status_check;
+alter table public.group_workout_registrations
+  add constraint group_workout_registrations_status_check
+  check (status in ('registered', 'waitlisted'));
+create index if not exists group_workout_registrations_queue_idx
+on public.group_workout_registrations (group_workout_id, status, created_at);
+
 alter table public.group_workouts enable row level security;
 alter table public.group_workout_registrations enable row level security;
 
@@ -751,10 +858,12 @@ using (
 
 revoke all on public.group_workouts, public.group_workout_registrations from public, anon, authenticated;
 grant select on public.group_workouts, public.group_workout_registrations to authenticated;
-grant insert (trainer_id, title, description, starts_at, duration_minutes, capacity)
+grant insert (trainer_id, title, description, starts_at, duration_minutes, capacity, location)
 on public.group_workouts to authenticated;
 
 drop function if exists public.get_group_workouts();
+drop function if exists public.create_group_workout(text, text, timestamptz, integer, integer);
+drop function if exists public.update_group_workout(uuid, text, text, timestamptz, integer, integer);
 
 create or replace function public.get_group_workouts()
 returns table (
@@ -769,7 +878,10 @@ returns table (
   participant_count bigint,
   is_registered boolean,
   cancelled_at timestamptz,
-  participant_names text[]
+  participant_names text[],
+  location text,
+  waitlist_count bigint,
+  is_waitlisted boolean
 )
 language sql
 stable
@@ -785,10 +897,10 @@ as $$
     gw.starts_at,
     gw.duration_minutes,
     gw.capacity,
-    (select count(*) from public.group_workout_registrations gwr where gwr.group_workout_id = gw.id),
+    (select count(*) from public.group_workout_registrations gwr where gwr.group_workout_id = gw.id and gwr.status = 'registered'),
     exists (
       select 1 from public.group_workout_registrations gwr
-      where gwr.group_workout_id = gw.id and gwr.client_id = auth.uid()
+      where gwr.group_workout_id = gw.id and gwr.client_id = auth.uid() and gwr.status = 'registered'
     ),
     gw.cancelled_at,
     case
@@ -797,10 +909,16 @@ as $$
           select array_agg(cp.full_name order by cp.full_name)
           from public.group_workout_registrations gwr
           join public.profiles cp on cp.id = gwr.client_id
-          where gwr.group_workout_id = gw.id
+          where gwr.group_workout_id = gw.id and gwr.status = 'registered'
         ), '{}')
       else '{}'::text[]
-    end
+    end,
+    gw.location::text,
+    (select count(*) from public.group_workout_registrations gwr where gwr.group_workout_id = gw.id and gwr.status = 'waitlisted'),
+    exists (
+      select 1 from public.group_workout_registrations gwr
+      where gwr.group_workout_id = gw.id and gwr.client_id = auth.uid() and gwr.status = 'waitlisted'
+    )
   from public.group_workouts gw
   join public.profiles p on p.id = gw.trainer_id
   where auth.uid() is not null
@@ -820,7 +938,8 @@ create or replace function public.create_group_workout(
   workout_description text,
   workout_starts_at timestamptz,
   workout_duration_minutes integer,
-  workout_capacity integer
+  workout_capacity integer,
+  workout_location text default null
 )
 returns uuid
 language plpgsql
@@ -832,6 +951,9 @@ declare
 begin
   if auth.uid() is null or public.current_role() <> 'trainer' then
     raise exception 'Csoportos edzést csak bejelentkezett edző hozhat létre.';
+  end if;
+  if char_length(coalesce(workout_location, '')) > 120 then
+    raise exception 'A helyszín legfeljebb 120 karakter lehet.';
   end if;
   if char_length(trim(coalesce(workout_title, ''))) not between 1 and 120 then
     raise exception 'Az edzés neve 1 és 120 karakter közötti legyen.';
@@ -848,12 +970,12 @@ begin
   if workout_capacity not between 2 and 100 then
     raise exception 'A létszám 2 és 100 fő közötti legyen.';
   end if;
-  if public.current_plan() = 'free' and workout_capacity > 6 then
-    raise exception 'A Free csomagban a csoportos edzés legfeljebb 6 fős lehet. Nagyobb csoporthoz Pro csomag szükséges.';
+  if workout_capacity > coalesce(public.plan_limit(public.current_plan(), 'group_capacity'), 100) then
+    raise exception 'A csomagodban a csoportos edzés legfeljebb % fős lehet. Nagyobb csoporthoz magasabb csomag szükséges.', public.plan_limit(public.current_plan(), 'group_capacity');
   end if;
 
-  insert into public.group_workouts (trainer_id, title, description, starts_at, duration_minutes, capacity)
-  values (auth.uid(), trim(workout_title), coalesce(workout_description, ''), workout_starts_at, workout_duration_minutes, workout_capacity)
+  insert into public.group_workouts (trainer_id, title, description, starts_at, duration_minutes, capacity, location)
+  values (auth.uid(), trim(workout_title), coalesce(workout_description, ''), workout_starts_at, workout_duration_minutes, workout_capacity, nullif(trim(coalesce(workout_location, '')), ''))
   returning id into new_workout_id;
   return new_workout_id;
 end;
@@ -867,7 +989,6 @@ set search_path = ''
 as $$
 declare
   workout_row public.group_workouts%rowtype;
-  registration_count integer;
 begin
   if auth.uid() is null or public.current_role() <> 'client' then
     raise exception 'Csoportos edzésre csak bejelentkezett kliens jelentkezhet.';
@@ -899,13 +1020,7 @@ begin
     return workout_id;
   end if;
 
-  select count(*) into registration_count
-  from public.group_workout_registrations
-  where group_workout_id = workout_id;
-  if registration_count >= workout_row.capacity then
-    raise exception 'A csoportos edzés betelt.';
-  end if;
-
+  -- A státuszt (registered / waitlisted) a group_workout_registrations_assign_status trigger állítja be.
   insert into public.group_workout_registrations (group_workout_id, client_id)
   values (workout_id, auth.uid());
   return workout_id;
@@ -988,7 +1103,8 @@ create or replace function public.update_group_workout(
   workout_description text,
   workout_starts_at timestamptz,
   workout_duration_minutes integer,
-  workout_capacity integer
+  workout_capacity integer,
+  workout_location text default null
 )
 returns uuid
 language plpgsql
@@ -1001,6 +1117,9 @@ declare
 begin
   if auth.uid() is null or public.current_role() <> 'trainer' then
     raise exception 'Csoportos edzést csak edző módosíthat.';
+  end if;
+  if char_length(coalesce(workout_location, '')) > 120 then
+    raise exception 'A helyszín legfeljebb 120 karakter lehet.';
   end if;
   select * into workout_row
   from public.group_workouts
@@ -1026,12 +1145,12 @@ begin
   end if;
   select count(*) into registration_count
   from public.group_workout_registrations
-  where group_workout_id = workout_id;
+  where group_workout_id = workout_id and status = 'registered';
   if workout_capacity is null or workout_capacity < greatest(2, registration_count) or workout_capacity > 100 then
     raise exception 'A létszám a jelentkezettek száma és 100 fő között lehet.';
   end if;
-  if public.current_plan() = 'free' and workout_capacity > 6 then
-    raise exception 'A Free csomagban a csoportos edzés legfeljebb 6 fős lehet. Nagyobb csoporthoz Pro csomag szükséges.';
+  if workout_capacity > coalesce(public.plan_limit(public.current_plan(), 'group_capacity'), 100) then
+    raise exception 'A csomagodban a csoportos edzés legfeljebb % fős lehet. Nagyobb csoporthoz magasabb csomag szükséges.', public.plan_limit(public.current_plan(), 'group_capacity');
   end if;
 
   update public.group_workouts
@@ -1039,24 +1158,140 @@ begin
       description = coalesce(workout_description, ''),
       starts_at = workout_starts_at,
       duration_minutes = workout_duration_minutes,
-      capacity = workout_capacity
+      capacity = workout_capacity,
+      location = nullif(trim(coalesce(workout_location, '')), '')
   where id = workout_id;
   return workout_id;
 end;
 $$;
 
+-- Várólista: a betelt edzésre jelentkezők 'waitlisted' státuszt kapnak.
+-- A workout sor zárolása sorosítja az egyidejű jelentkezéseket.
+create or replace function public.assign_group_workout_registration_status()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  workout_capacity integer;
+  registered_count integer;
+begin
+  select gw.capacity into workout_capacity
+  from public.group_workouts gw
+  where gw.id = new.group_workout_id
+  for update;
+  if not found then
+    return new;
+  end if;
+
+  select count(*) into registered_count
+  from public.group_workout_registrations gwr
+  where gwr.group_workout_id = new.group_workout_id and gwr.status = 'registered';
+
+  new.status := case when registered_count < workout_capacity then 'registered' else 'waitlisted' end;
+  return new;
+end;
+$$;
+
+-- A felszabadult helyekre a legrégebbi (created_at) várólistásokat lépteti elő.
+create or replace function public.promote_group_workout_waitlist(target_workout_id uuid)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  workout_capacity integer;
+  free_slots integer;
+begin
+  select gw.capacity into workout_capacity
+  from public.group_workouts gw
+  where gw.id = target_workout_id and gw.cancelled_at is null
+  for update;
+  if not found then
+    return;
+  end if;
+
+  select workout_capacity - count(*) into free_slots
+  from public.group_workout_registrations gwr
+  where gwr.group_workout_id = target_workout_id and gwr.status = 'registered';
+  if free_slots <= 0 then
+    return;
+  end if;
+
+  update public.group_workout_registrations gwr
+  set status = 'registered'
+  where gwr.group_workout_id = target_workout_id
+    and gwr.client_id in (
+      select w.client_id
+      from public.group_workout_registrations w
+      where w.group_workout_id = target_workout_id and w.status = 'waitlisted'
+      order by w.created_at, w.client_id
+      limit free_slots
+    );
+end;
+$$;
+
+create or replace function public.group_workout_registration_removed()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.status = 'registered' then
+    perform public.promote_group_workout_waitlist(old.group_workout_id);
+  end if;
+  return null;
+end;
+$$;
+
+create or replace function public.group_workout_capacity_increased()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  perform public.promote_group_workout_waitlist(new.id);
+  return null;
+end;
+$$;
+
+drop trigger if exists group_workout_registrations_assign_status on public.group_workout_registrations;
+create trigger group_workout_registrations_assign_status
+before insert on public.group_workout_registrations
+for each row execute function public.assign_group_workout_registration_status();
+
+drop trigger if exists group_workout_registrations_promote_waitlist on public.group_workout_registrations;
+create trigger group_workout_registrations_promote_waitlist
+after delete on public.group_workout_registrations
+for each row execute function public.group_workout_registration_removed();
+
+drop trigger if exists group_workouts_promote_waitlist on public.group_workouts;
+create trigger group_workouts_promote_waitlist
+after update of capacity on public.group_workouts
+for each row when (new.capacity > old.capacity)
+execute function public.group_workout_capacity_increased();
+
+revoke all on function public.assign_group_workout_registration_status() from public, anon, authenticated;
+revoke all on function public.promote_group_workout_waitlist(uuid) from public, anon, authenticated;
+revoke all on function public.group_workout_registration_removed() from public, anon, authenticated;
+revoke all on function public.group_workout_capacity_increased() from public, anon, authenticated;
+
 revoke all on function public.get_group_workouts() from public;
-revoke all on function public.create_group_workout(text, text, timestamptz, integer, integer) from public;
+revoke all on function public.create_group_workout(text, text, timestamptz, integer, integer, text) from public;
 revoke all on function public.join_group_workout(uuid) from public;
 revoke all on function public.leave_group_workout(uuid) from public;
 revoke all on function public.cancel_group_workout(uuid) from public;
-revoke all on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer) from public;
+revoke all on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer, text) from public;
 grant execute on function public.get_group_workouts() to authenticated;
-grant execute on function public.create_group_workout(text, text, timestamptz, integer, integer) to authenticated;
+grant execute on function public.create_group_workout(text, text, timestamptz, integer, integer, text) to authenticated;
 grant execute on function public.join_group_workout(uuid) to authenticated;
 grant execute on function public.leave_group_workout(uuid) to authenticated;
 grant execute on function public.cancel_group_workout(uuid) to authenticated;
-grant execute on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer) to authenticated;
+grant execute on function public.update_group_workout(uuid, text, text, timestamptz, integer, integer, text) to authenticated;
 
 create table if not exists public.training_plans (
   id uuid primary key default gen_random_uuid(),
@@ -1123,6 +1358,7 @@ as $$
       where tp.id = candidate_plan_id
         and (
           tp.trainer_id = auth.uid()
+          or public.is_studio_head_of(tp.trainer_id)
           or tp.is_public
           or exists (
             select 1
@@ -1163,7 +1399,8 @@ using (
   )
   or exists (
     select 1 from public.training_plans tp
-    where tp.id = training_plan_clients.plan_id and tp.trainer_id = auth.uid()
+    where tp.id = training_plan_clients.plan_id
+      and (tp.trainer_id = auth.uid() or public.is_studio_head_of(tp.trainer_id))
   )
 );
 
@@ -1218,9 +1455,12 @@ begin
   if actor_role = 'admin' then
     return new;
   elsif actor_role = 'trainer' then
-    if new.trainer_id is distinct from auth.uid()
-      or plan_trainer_id <> auth.uid()
-      or not public.is_assigned_trainer(new.client_id) then
+    if (new.trainer_id is distinct from auth.uid() and not public.is_studio_head_of(new.trainer_id))
+      or plan_trainer_id is distinct from new.trainer_id
+      or not exists (
+        select 1 from public.client_trainers ct
+        where ct.client_id = new.client_id and ct.trainer_id = new.trainer_id
+      ) then
       raise exception 'Csak saját edzésterved napját kapcsolhatod hozzád rendelt klienshez.';
     end if;
   elsif actor_role = 'client' then
@@ -1318,10 +1558,12 @@ begin
     if jsonb_array_length(days_value) > 3 then
       raise exception 'A Free csomagban egy edzésterv legfeljebb 3 edzésnapot tartalmazhat. További napokhoz Pro csomag szükséges.';
     end if;
-    if (plan_payload->>'id' is null or plan_payload->>'id' = '')
-      and (select count(*) from public.training_plans tp where tp.trainer_id = actor_id) >= 2 then
-      raise exception 'A Free csomagban legfeljebb 2 edzésterv készíthető. További tervekhez Pro csomag szükséges.';
-    end if;
+  end if;
+  if (plan_payload->>'id' is null or plan_payload->>'id' = '')
+    and public.plan_limit(public.current_plan(), 'training_plans') is not null
+    and (select count(*) from public.training_plans tp where tp.trainer_id = actor_id)
+        >= public.plan_limit(public.current_plan(), 'training_plans') then
+    raise exception 'A csomagodban legfeljebb % edzésterv készíthető. További tervekhez magasabb csomag szükséges.', public.plan_limit(public.current_plan(), 'training_plans');
   end if;
 
   select count(*), count(distinct value)
@@ -1335,7 +1577,8 @@ begin
     from jsonb_array_elements_text(client_ids_value) requested(client_id)
     where not exists (
       select 1 from public.client_trainers ct
-      where ct.client_id = requested.client_id::uuid and ct.trainer_id = actor_id
+      where ct.client_id = requested.client_id::uuid
+        and (ct.trainer_id = actor_id or public.is_studio_head_of(ct.trainer_id))
     )
   ) then
     raise exception 'Csak a hozzád rendelt kliensekkel oszthatod meg az edzéstervet.';
@@ -1352,7 +1595,8 @@ begin
         description = description_value,
         is_public = public_value,
         updated_at = now()
-    where id = target_plan_id and trainer_id = actor_id;
+    where id = target_plan_id
+      and (trainer_id = actor_id or public.is_studio_head_of(trainer_id));
     if not found then
       raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a módosításához.';
     end if;
@@ -1454,7 +1698,7 @@ begin
     raise exception 'Edzéstervet csak bejelentkezett edző törölhet.';
   end if;
   delete from public.training_plans
-  where id = $1 and trainer_id = auth.uid();
+  where id = $1 and (trainer_id = auth.uid() or public.is_studio_head_of(trainer_id));
   if not found then
     raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a törléséhez.';
   end if;

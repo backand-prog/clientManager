@@ -152,6 +152,23 @@ function bindModalEvents() {
       document.querySelector("#modal-backdrop").remove(); await refreshRemote(); render(); toast("Edzői fiók létrehozva");
     } catch (error) { toast(`Nem sikerült létrehozni: ${error.message}`); }
   });
+  document.querySelector("#studio-coach-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const submit = form.querySelector("button.btn-dark");
+    const values = Object.fromEntries(new FormData(form).entries());
+    submit.disabled = true;
+    try {
+      await api.inviteStudioCoach(values.email, values.name);
+      document.querySelector("#modal-backdrop").remove();
+      await refreshRemote();
+      render();
+      toast("A meghívó elküldve");
+    } catch (error) {
+      submit.disabled = false;
+      toast(`Nem sikerült a meghívás: ${error.message}`);
+    }
+  });
 }
 
 function renderModal(type, client = {}) {
@@ -185,6 +202,10 @@ export function renderTrainerAssignmentModal(client) {
 
 export function renderTrainerModal() {
   return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Adminisztráció</div><h2>Új edző létrehozása</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="trainer-form"><div class="field"><label for="trainer-name">Teljes név</label><input id="trainer-name" name="name" required /></div><div class="field"><label for="trainer-email">E-mail-cím</label><input id="trainer-email" name="email" type="email" required /></div><div class="field"><label for="trainer-password">Ideiglenes jelszó</label><input id="trainer-password" name="password" type="password" minlength="8" required /></div><div class="field"><label for="trainer-specialty">Szakterület</label><input id="trainer-specialty" name="specialty" placeholder="pl. Erőnléti edzés" /></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Edző létrehozása</button></div></form></div></div>`;
+}
+
+export function renderStudioCoachModal() {
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Studio / Csapatom</div><h2>Új edző meghívása</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="studio-coach-form"><div class="field"><label for="studio-coach-name">Teljes név</label><input id="studio-coach-name" name="name" required maxlength="120" autocomplete="off" /></div><div class="field"><label for="studio-coach-email">E-mail-cím</label><input id="studio-coach-email" name="email" type="email" required autocomplete="off" /><small class="settings-help">A megadott címre meghívó e-mailt küldünk. Az elfogadás után a fiók a stúdiód al-edzőjeként működik.</small></div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:12px"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">Meghívó küldése</button></div></form></div></div>`;
 }
 
 export function openUpgradeModal(reason) {
