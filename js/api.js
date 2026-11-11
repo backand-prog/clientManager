@@ -112,9 +112,6 @@ export async function load() {
   const workouts = workoutsResult.data || [];
   const profiles = profilesResult.data || [];
   const currentProfile = profiles.find((profile) => profile.id === user.id);
-  const trainerApplications = currentProfile?.role === "admin"
-    ? (await accountAdmin({ action: "list-trainer-applications" })).applications || []
-    : [];
   const coachProfiles = await Promise.all((coachProfilesResult.data || []).map(async (profile) => {
     const signedResult = profile.photo_paths.length
       ? await client.storage.from("coach-profile-images").createSignedUrls(profile.photo_paths, 3600)
@@ -156,7 +153,7 @@ export async function load() {
         trainerApplicationStatus: profile.trainer_application_status || "none",
         parentStudioId: profile.parent_studio_id || null,
         name: profile.full_name,
-        email: profile.id === user.id ? user.email : trainerApplications.find((application) => application.id === profile.id)?.email || "",
+        email: profile.id === user.id ? user.email : "",
         emailConfirmed: profile.id === user.id ? Boolean(user.email_confirmed_at) : undefined,
         specialty: profile.specialty || "",
         goal: profile.goal || "",
@@ -177,7 +174,6 @@ export async function load() {
         || (coachProfilesResult.data || []).find((profile) => profile.id === plan.trainer_id)?.display_name
         || ""
     })),
-    trainerApplications,
     connectionRequests: (requestsResult.data || []).map((request) => ({
       id: request.id,
       requesterId: request.requester_id,

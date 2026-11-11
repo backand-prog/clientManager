@@ -234,6 +234,11 @@ tbody tr:last-child td { border-bottom: 0; }
 .coach-profile-detail .coach-card-heading h1 { margin: 4px 0; }
 .coach-profile-detail > h2 { margin: 24px 0 8px; }
 .coach-bio { color: var(--ink); font-size: .88rem; line-height: 1.6; white-space: pre-wrap; }
+.coach-actions { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px; margin-top: 20px; }
+.coach-contact-reveal summary { cursor: pointer; list-style: none; display: inline-block; }
+.coach-contact-reveal summary::-webkit-details-marker { display: none; }
+.coach-contact-reveal p { margin: 10px 0 0; font-size: .88rem; }
+.coach-contact-reveal a { color: var(--teal); font-weight: 600; word-break: break-all; }
 .coach-gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 14px 0; }
 .coach-gallery img { display: block; width: 100%; height: auto; border-radius: 7px; object-fit: contain; background: var(--mint); }
 .coach-profile-gallery { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }

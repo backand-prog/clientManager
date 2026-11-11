@@ -10,7 +10,7 @@ import {
 } from "../state.js";
 import { render, toast } from "../runtime.js";
 import { toDateInputValue } from "../utils.js";
-import { dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutTime, initials, pendingTrainerApplications, planLabel, selectedClient, trainerName, trainers, upcomingGroupWorkouts, upcomingWorkouts, workoutDateToInputValue, workoutTrainerLabel } from "../helpers.js";
+import { dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutTime, initials, planLabel, selectedClient, trainerName, trainers, upcomingGroupWorkouts, upcomingWorkouts, workoutDateToInputValue, workoutTrainerLabel } from "../helpers.js";
 import { renderClients, renderEnhancedClientDetail } from "./clients.js";
 import { renderCoachProfileDetail } from "./coaches.js";
 
@@ -93,7 +93,6 @@ export function renderAdminHome(admin) {
 export function renderAdminContent() {
   if (currentView === "clients") return renderClients();
   if (currentView === "trainers") return renderTrainers();
-  if (currentView === "trainer-applications") return renderTrainerApplications();
   if (currentView === "administrators") return renderAdminAccounts();
   if (currentView === "subscriptions") return renderAdminSubscriptions();
   if (currentView === "coach-profiles") return renderAdminCoachProfiles();
@@ -181,11 +180,6 @@ function renderAdminCoachProfiles() {
 function renderTrainers() {
   const trainerList = trainers();
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzők</div><h1>Edzők</h1><p>Az edzői fiókokat és hozzáféréseket itt kezelheted.</p></div><button class="btn btn-teal" id="add-trainer">+ Új edző</button></div><section class="panel"><div class="table-wrap"><table><thead><tr><th>Edző</th><th>Szakterület</th><th>Hozzárendelt kliens</th><th></th></tr></thead><tbody>${trainerList.length ? trainerList.map((trainer) => `<tr><td><div class="client-cell"><div class="avatar">${initials(trainer.name)}</div>${escapeHtml(trainer.name)}</div><small>${escapeHtml(trainer.email || "")}</small></td><td>${escapeHtml(trainer.specialty || "Általános edzés")}</td><td>${data.users.filter((client) => client.role === "client" && (client.trainerIds || []).includes(trainer.id)).length}</td><td><button class="text-button" data-coach-review="${escapeHtml(trainer.id)}" ${(data.coachProfiles || []).some((profile) => profile.id === trainer.id) ? "" : 'disabled title="Még nincs kitöltött bemutatkozó profil"'}>Megtekintés</button> <button class="text-button btn-delete-trainer" data-trainer-id="${trainer.id}">Törlés</button></td></tr>`).join("") : `<tr><td colspan="4"><div class="empty-state">Még nincs edző.</div></td></tr>`}</tbody></table></div></section>`;
-}
-
-function renderTrainerApplications() {
-  const applications = pendingTrainerApplications();
-  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzői jelentkezések</div><h1>Edzői jelentkezések</h1><p>E-mail-megerősítés után hagyd jóvá vagy utasítsd el az edzői hozzáférést.</p></div></div><section class="panel">${applications.length ? applications.map((application) => `<div class="connection-row"><div><strong>${escapeHtml(application.full_name)}</strong><p>${escapeHtml(application.email || "Nincs e-mail-cím")} · ${escapeHtml(application.specialty || "Nincs megadva szakterület")}</p><small>${application.created_at ? `Jelentkezett: ${escapeHtml(new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(application.created_at)))}` : ""}${application.emailConfirmed ? " · E-mail megerősítve" : " · E-mail-megerősítésre vár"}</small></div><button class="btn btn-teal" data-trainer-application="approved" data-user-id="${escapeHtml(application.id)}" ${application.emailConfirmed ? "" : "disabled"}>Jóváhagyás</button><button class="btn btn-ghost" data-trainer-application="rejected" data-user-id="${escapeHtml(application.id)}">Elutasítás</button></div>`).join("") : `<div class="empty-state">Nincs elbírálásra váró edzői jelentkezés.</div>`}</section>`;
 }
 
 export async function loadAdminAccounts() {

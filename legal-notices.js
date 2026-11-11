@@ -26,14 +26,14 @@ window.LEGAL_NOTICES = Object.freeze({
         {
           heading: "Milyen adatokat kezelhet a szolgáltatás?",
           paragraphs: [
-            "Fiókadatok: név, e-mail-cím és a kiválasztott fióktípus. Edzői jelentkezés esetén a megadott szakterületet, a jelentkezés állapotát és az adminisztrátori döntést is kezeljük. Működési adatok: edzéscélok, edzésidőpontok, edzésnapló és megjegyzések, kliens–edző kapcsolatok és alkalmazáson belüli értesítések. Az edző nyilvános profiljához bemutatkozás, szakterület és feltöltött képek tartozhatnak. Bejelentkezéskor a hitelesítéshez szükséges munkamenet-adatokat is kezeljük.",
+            "Fiókadatok: név, e-mail-cím és a kiválasztott fióktípus. Edzői regisztráció esetén a megadott szakterületet is kezeljük. Működési adatok: edzéscélok, edzésidőpontok, edzésnapló és megjegyzések, kliens–edző kapcsolatok és alkalmazáson belüli értesítések. Az edző nyilvános profiljához bemutatkozás, szakterület és feltöltött képek tartozhatnak. Bejelentkezéskor a hitelesítéshez szükséges munkamenet-adatokat is kezeljük.",
             "Ne rögzíts diagnózist, betegséget, sérülést, gyógyszerelést, biometrikus vagy más egészségügyi adatot az edzéscélokban, megjegyzésekben vagy képeken. Az ilyen különleges adatok kezelése külön, kifejezett jogalapot, fokozott biztonsági intézkedéseket és szükség szerint hatásvizsgálatot igényel."
           ]
         },
         {
           heading: "Célok, jogalapok és megőrzés",
           paragraphs: [
-            "A tervezett célok a fiók biztosítása, az edzői és kliensfunkciók működtetése, edzői jelentkezések elbírálása, kapcsolati kérések és edzések kezelése, ügyféltámogatás, biztonság, valamint – későbbi fizetős csomag esetén – szerződés és számlázás kezelése. A GDPR szerinti jogalapot és adatmegőrzési időt minden célhoz külön kell véglegesíteni. A megőrzési idők nincsenek még meghatározva.",
+            "A tervezett célok a fiók biztosítása, az edzői és kliensfunkciók működtetése, kliens–edző kapcsolatok, edzői profilok, kapcsolati kérések és edzések kezelése, ügyféltámogatás, biztonság, valamint – későbbi fizetős csomag esetén – szerződés és számlázás kezelése. A GDPR szerinti jogalapot és adatmegőrzési időt minden célhoz külön kell véglegesíteni. A megőrzési idők nincsenek még meghatározva.",
             "A fiók törlésekor a kapcsolódó profil és az ahhoz közvetlenül tartozó adatok törlődnek. Más személy által is használt edzés- vagy számlaadatot jogszabályi megőrzési kötelezettség miatt esetleg korlátozni vagy anonimizálni kellhet; ennek szabályait a fizetési modell kialakításakor kell meghatározni."
           ]
         },

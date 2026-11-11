@@ -7,7 +7,7 @@ Első verziós klienskezelő személyi edzők számára.
 ## Funkciók
 
 - Magyar nyelvű adminisztrátori áttekintő
-- Edzői szerepkör adminisztrátori jóváhagyással vagy adminisztrátori fiók-létrehozással
+- Edzői szerepkör önregisztrációval (adminisztrátori jóváhagyás nélkül) vagy adminisztrátori fiók-létrehozással
 - Több edző hozzárendelése ugyanahhoz a klienshez, kapcsolat leválasztásával
 - Klienslista kereséssel, állapottal, teljesítéssel és edzői megjegyzésekkel
 - Kliensprofilok hozzáadása és szerkesztése
@@ -24,7 +24,7 @@ Első verziós klienskezelő személyi edzők számára.
 - Egyéni edzés létrehozásakor vagy szerkesztésekor opcionálisan kiválasztható egy, a kliens számára elérhető edzéstervnap
 - Egyéni, edző nélküli edzések naplózása
 - Kliens saját profil- és fejlődésnézete; nyilvános, 18+ kliensregisztráció
-- Edzői jelentkezés e-mail-megerősítéssel, adminisztrátori elbírálással és jóváhagyásig korlátozott hozzáféréssel
+- Edzői regisztráció e-mail-megerősítéssel, adminisztrátori jóváhagyás nélkül
 - Kezdőlap szerepkörhöz igazított áttekintéssel, külön kliens- és edzői beállításokkal
 - Külön kapcsolati és értesítési oldalak, olvasatlan értesítések előnézetével
 - Szerkeszthető edzői bemutatkozás szakterülettel, elérhetőségekkel (telefon, e-mail), edzéshelyszínnel, vállalt idősávokkal és legfeljebb 5 képpel
@@ -58,11 +58,11 @@ A `supabase-schema.sql` adatbázis-triggerrel védi az utolsó adminfiókot: az 
 
 Az adminisztrátorok a bejelentkezett felületen az **Adminisztrátorok** menüpontban adhatnak adminjogot megerősített e-mail-című kliensfiókoknak. A felhasználónak előbb regisztrálnia kell és meg kell erősítenie az e-mail-címét; utána az admin kiválasztja a fiókot a listából. A szerepkör-módosítást hitelesített `account-admin` Edge Function végzi, és az adatbázis-trigger továbbra is megakadályozza az utolsó admin eltávolítását. Az adminisztrátorok azonos jogosultságúak. A módosítás telepítéséhez deployold az Edge Functiont (`supabase functions deploy account-admin`), majd a frontend új Vercel-buildje is szükséges.
 
-**Regisztráció és tesztelés:** a felületen jelenleg engedélyezett a nyilvános, 18+ kliensregisztráció és az edzői jelentkezés (`legal-notices.js`). Az edzőnek jelentkezők e-mail-megerősítés után az adminisztrátori Edzői jelentkezések menüpontban bírálhatók el; jóváhagyásig sem kliens-, sem edzői munkateret nem érhetnek el. A szerepkört kizárólag az admin Edge Function adja ki. A jogi tájékoztatók továbbra is tervezetek, és a szolgáltató adatai, illetve a végleges üzleti feltételek hiányoznak, így ez tesztelési lehetőség, nem hivatalos éles indulás vagy jogi megfelelőségi igazolás. Supabase használatakor az Authentication → Providers → Email beállításnál a **Allow new users to sign up** opciónak is engedélyezve kell lennie, a **Confirm email** pedig maradjon bekapcsolva. A frontend-kapcsoló önmagában nem módosítja az API-szintű regisztrációs beállítást. Éles használat előtt töltsd ki és jogilag ellenőriztesd a [LEGAL-COMPLIANCE.md](./LEGAL-COMPLIANCE.md) nyitott pontjait.
+**Regisztráció és tesztelés:** a felületen jelenleg engedélyezett a nyilvános, 18+ kliensregisztráció és az edzői regisztráció (`legal-notices.js`). Az edzőnek regisztrálók e-mail-megerősítés után azonnal használhatják az edzői felületet, adminisztrátori jóváhagyás nincs. A jogi tájékoztatók továbbra is tervezetek, és a szolgáltató adatai, illetve a végleges üzleti feltételek hiányoznak, így ez tesztelési lehetőség, nem hivatalos éles indulás vagy jogi megfelelőségi igazolás. Supabase használatakor az Authentication → Providers → Email beállításnál a **Allow new users to sign up** opciónak is engedélyezve kell lennie, a **Confirm email** pedig maradjon bekapcsolva. A frontend-kapcsoló önmagában nem módosítja az API-szintű regisztrációs beállítást. Éles használat előtt töltsd ki és jogilag ellenőriztesd a [LEGAL-COMPLIANCE.md](./LEGAL-COMPLIANCE.md) nyitott pontjait.
 
 Az első tesztelési kör 18 éven felülieknek szól; kiskorúak bevonása későbbi, külön jogi és technikai felülvizsgálatot igényel. A jelenlegi irány egy 3–5 edzővel végzett ingyenes pilot, analitika és marketing nélkül. Későbbi bevételi modellként az edzői előfizetés és ingyenes kliensfiók vizsgálata merült fel, de az árak és feltételek nincsenek eldöntve. Fizetést ne kapcsolj be a jogi/szolgáltatói adatok, a feltételek és a szakértői jóváhagyás előtt. Egészségügyi adat kezelését a jelenlegi termékirány kizárja.
 
-A `supabase-schema.sql` újrafuttatása létrehozza az edzői jelentkezés állapotmezőjét, és lecseréli az Auth felhasználót létrehozó triggert: az önregisztráló fiók adatbázisbeli szerepköre mindig `client`; az edzői jelentkezők hozzáférése az elbírálásig le van tiltva. A felhasználó által küldött metadata nem adhat edzői jogosultságot. Az adminisztrátor az Edge Functionön keresztül bírálja el a megerősített e-mail-című jelentkezőket; jóváhagyáskor ez állítja be a `trainer` szerepkört. Meglévő projektnél futtasd le újra a teljes sémát, majd telepítsd újra az Edge Functiont (`supabase functions deploy account-admin`).
+A `supabase-schema.sql` újrafuttatása lecseréli az Auth felhasználót létrehozó triggert: a regisztrációkor választott `trainer` szerepkör közvetlenül érvényesül (adminisztrátori jóváhagyás nincs; az admin szerepkör továbbra is csak az Edge Functionnel adható). A korábban függőben lévő jelentkezők edzők lesznek. Meglévő projektnél futtasd le újra a teljes sémát, majd telepítsd újra az Edge Functiont (`supabase functions deploy account-admin`).
 
 A regisztrációs megerősítő és jelszó-visszaállító e-maileket a Supabase Auth küldi. A linkek az alkalmazás gyökér URL-jére irányítanak, hogy a Supabase kliens a hitelesítési tokeneket a hash-alapú útvonalkezelés mellett is feldolgozhassa. Engedélyezd ezt az URL-t a Supabase Authentication redirect allowlistjében. Valós kézbesítés teszteléséhez állíts be saját SMTP-szolgáltatót az Authentication e-mail beállításainál, és csak olyan e-mail-címet használj, amelynek postafiókjához hozzáférsz. Az e-mail-megerősítés és a visszaállítás a Supabase Auth-on keresztül működik.
 
@@ -81,7 +81,7 @@ Az alkalmazás Vercelre GitHub-projektként telepíthető. A build a böngésző
 3. Ellenőrizd a **Build and Output Settings** részen, hogy a build parancs `node scripts/build-static.mjs`, a kimeneti könyvtár pedig `dist`.
 4. Futtasd le a frissített `supabase-schema.sql` sémát a staging Supabase-projekt SQL Editorában, mielőtt az edzésterveket vagy csoportos edzéseket használó frontend build kikerül; telepítsd az Edge Functiont is: `supabase functions deploy account-admin`.
 5. A Vercel által kiosztott domain gyökerét add hozzá a staging projekt Supabase Authentication URL Configuration beállításának **Site URL** és **Redirect URLs** listájához.
-6. Deploy után ellenőrizd az e-mail-megerősítést, kliensregisztrációt, edzői jelentkezést és adminisztrátori jóváhagyást a staging környezetben.
+6. Deploy után ellenőrizd az e-mail-megerősítést, kliensregisztrációt, edzői regisztrációt a staging környezetben.
 
 Az anon/publishable kulcs böngészőoldali nyilvánosságra hozása tervezett; az adatok védelmét a Supabase RLS adja. Staginghez külön Supabase-projektet használj, és abban ne tárolj éles személyes adatot.
 

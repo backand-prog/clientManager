@@ -23,13 +23,16 @@ export function renderCoachProfileDetail() {
   const user = currentUser();
   const request = isAdmin ? null : data.connectionRequests.find((item) => item.requesterId === user.id && item.recipientId === profile.id && item.status === "pending");
   const connected = !isAdmin && (user.trainerIds || []).includes(profile.id);
+  const contactReveal = profile.contactEmail
+    ? `<details class="coach-contact-reveal"><summary class="btn btn-ghost">Kapcsolatfelvétel az edzővel</summary><p>Írj az edzőnek e-mailben: <a href="mailto:${escapeHtml(profile.contactEmail)}">${escapeHtml(profile.contactEmail)}</a></p></details>`
+    : `<details class="coach-contact-reveal"><summary class="btn btn-ghost">Kapcsolatfelvétel az edzővel</summary><p>Az edző még nem adott meg e-mail-címet. Küldj kapcsolódási kérést, és ő jelentkezik.</p></details>`;
   const connectionAction = isAdmin
     ? ""
     : connected
       ? `<span class="status status-active">Már a kapcsolataid között van</span>`
       : request
         ? `<span class="status status-paused">Kérés elküldve · válaszra vár</span>`
-        : `<button class="btn btn-teal" data-coach-request="${escapeHtml(profile.id)}">Kapcsolódási kérés küldése</button>`;
+        : `<button class="btn btn-teal" data-coach-request="${escapeHtml(profile.id)}">Jelentkezés az edzőhöz</button>`;
   const contactRows = [
     profile.phone ? `<div class="meta-row"><span>Telefon</span><strong>${escapeHtml(profile.phone)}</strong></div>` : "",
     profile.contactEmail ? `<div class="meta-row"><span>E-mail</span><strong>${escapeHtml(profile.contactEmail)}</strong></div>` : ""
@@ -42,7 +45,7 @@ export function renderCoachProfileDetail() {
       ${profile.location ? `<h2>Edzéshelyszín</h2><p class="coach-bio">${escapeHtml(profile.location)}</p>` : ""}
       ${profile.availability ? `<h2>Idősávok</h2><p class="coach-bio">${escapeHtml(profile.availability)}</p>` : ""}
       <h2>Képek</h2>${profile.photos?.length ? `<div class="coach-gallery coach-profile-gallery">${profile.photos.map((photo) => `<img src="${escapeHtml(photo.url)}" alt="${escapeHtml(profile.name)} edzésfotója" />`).join("")}</div>` : `<p class="muted">Ehhez a profilhoz még nem töltöttek fel képet.</p>`}
-      ${connectionAction}
+      ${isAdmin ? "" : `<div class="coach-actions">${connectionAction}${contactReveal}</div>${!connected && !request ? `<p class="settings-help">A „Jelentkezés az edzőhöz” gombbal kapcsolódási kérést küldesz; az edző jóváhagyása után kerülsz a kliensei közé. Ha előbb kérdeznél, használd a kapcsolatfelvételt.</p>` : ""}`}
     </article>`;
 }
 

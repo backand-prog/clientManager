@@ -18,7 +18,7 @@ A BackPlan egy online munkatér személyi edzők és kliensek számára (edzésn
 | Adatkör | Adatok | Cél | Jogalap (GDPR 6. cikk) | Megőrzés |
 |---|---|---|---|---|
 | Fiók | név, e-mail-cím, jelszó (titkosított hash), szerepkör (edző/kliens) | fiók létrehozása és biztosítása, belépés | szerződés teljesítése (1) b) | a fiók törléséig |
-| Edzői jelentkezés | szakterület, jelentkezés állapota, admini döntés | edzői fiók elbírálása | szerződés megkötését megelőző lépés (1) b) | a fiók törléséig |
+| Edzői regisztráció | szakterület, fióktípus | edzői fiók létrehozása | szerződés megkötését megelőző lépés (1) b) | a fiók törléséig |
 | Munkatér | edzéscélok, edzésidőpontok, edzésnapló, megjegyzések, edzéstervek, csoportos edzések és jelentkezések, kliens–edző kapcsolatok, értesítések | a szolgáltatás nyújtása | szerződés teljesítése (1) b) | a fiók törléséig, illetve a kapcsolat megszűnéséig |
 | Nyilvános edzői profil | bemutatkozás, szakterület, feltöltött képek | az edző megtalálhatósága | az edző döntése/hozzájárulása (1) a) és szerződés (1) b) | a profil törléséig |
 | Előfizetés | csomag, állapot, időszak vége, Stripe-ügyfél- és előfizetés-azonosító | előfizetés kezelése, hozzáférés szabályozása | szerződés teljesítése (1) b) | a szerződés megszűnéséig, majd 8 évig a számviteli adatokra |

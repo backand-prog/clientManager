@@ -2,7 +2,7 @@ import { enabled } from "./supabaseClient.js";
 import { toDateInputValue } from "./utils.js";
 
 export function emptyAppData() {
-  return { users: [], connectionRequests: [], notifications: [], groupWorkouts: [], trainingPlans: [], coachProfiles: [], activities: [], trainerApplications: [] };
+  return { users: [], connectionRequests: [], notifications: [], groupWorkouts: [], trainingPlans: [], coachProfiles: [], activities: [] };
 }
 
 // Az exportált `let` bindingek más modulokban élőben olvashatók, de csak a setterekkel írhatók.

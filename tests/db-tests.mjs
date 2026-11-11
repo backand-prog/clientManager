@@ -221,6 +221,24 @@ const scenarios = {
       raise exception 'RESULT:%', res;
     end $$;`,
 
+  "regisztráció: edzői szerepkör jóváhagyás nélkül": `
+    do $$ declare res text := ''; u1 uuid := gen_random_uuid(); u2 uuid := gen_random_uuid(); u3 uuid := gen_random_uuid(); r1 text; r2 text; r3 text;
+    begin
+      insert into auth.users (id, email, raw_user_meta_data, instance_id, aud, role) values
+        (u1, 'rt1@t.test', '{"requested_role":"trainer","full_name":"T","specialty":"Erő"}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+        (u2, 'rt2@t.test', '{"requested_role":"admin","full_name":"A"}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated'),
+        (u3, 'rt3@t.test', '{"requested_role":"client","full_name":"C"}', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated');
+      select role::text into r1 from public.profiles where id = u1;
+      select role::text into r2 from public.profiles where id = u2;
+      select role::text into r3 from public.profiles where id = u3;
+      res := res || pg_temp.chk('edzőként regisztráló azonnal edző', r1 = 'trainer');
+      res := res || pg_temp.chk('admin szerepkör nem kérhető regisztrációkor', r2 = 'client');
+      res := res || pg_temp.chk('kliens regisztráció kliens marad', r3 = 'client');
+      perform pg_temp.as_user(u1);
+      res := res || pg_temp.chk('az új edző current_role-ja trainer', public.current_role()::text = 'trainer');
+      raise exception 'RESULT:%', res;
+    end $$;`,
+
   "stúdió RLS és csomag-öröklés": `
     do $$ declare res text := ''; h uuid := pg_temp.mk('trainer','sh'); s uuid := pg_temp.mk('trainer','ss'); o uuid := pg_temp.mk('trainer','so');
       cs uuid := pg_temp.mk('client','scs'); co uuid := pg_temp.mk('client','sco'); ch uuid := pg_temp.mk('client','sch'); n int;

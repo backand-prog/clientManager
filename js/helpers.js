@@ -192,10 +192,6 @@ export function coachProfileFor(id) {
   return (data.coachProfiles || []).find((profile) => profile.id === id);
 }
 
-export function pendingTrainerApplications() {
-  return data.trainerApplications || [];
-}
-
 export function calendarClientsFor(user) {
   if (user.role === "admin") return data.users.filter((item) => item.role === "client");
   if (user.role === "trainer") return data.users.filter((item) => item.role === "client" && (item.trainerIds || []).includes(user.id));

@@ -53,10 +53,10 @@ Az alkalmazás Supabase JS könyvtárat tölt be a jsDelivr CDN-ről; emiatt a b
 ## Amit a kódban most megvalósítottunk
 
 - Nyilvános adatvédelmi, felhasználási és sütitájékoztató **tervezet** érhető el. A hiányzó szolgáltatói adatok és üzleti feltételek nyíltan kitöltendőként szerepelnek.
-- A nyilvános, 18+ kliensregisztráció és edzői jelentkezés tesztelésre engedélyezett; a jogi dokumentumok továbbra is tervezetek, ezért ez nem jelent hivatalos vagy jogilag jóváhagyott éles indulást. Az edzőnek jelentkezők e-mail-megerősítés után adminisztrátori elbírálást kapnak, és jóváhagyásig nem használhatják az alkalmazás munkaterét. Kiskorúak bevonását külön jogi és technikai fázisban kell vizsgálni.
+- A nyilvános, 18+ kliensregisztráció és edzői regisztráció tesztelésre engedélyezett; a jogi dokumentumok továbbra is tervezetek, ezért ez nem jelent hivatalos vagy jogilag jóváhagyott éles indulást. Az edzői regisztrációhoz nincs adminisztrátori jóváhagyás. Kiskorúak bevonását külön jogi és technikai fázisban kell vizsgálni.
 - Az indulási terv egy 3–5 edzővel végzett zárt, ingyenes pilot, analitika és marketing nélkül. Későbbi monetizációs hipotézis az edzők előfizetése és a kliensek ingyenes hozzáférése; árak, csomagok és jogi feltételek még nincsenek meghatározva.
 - A felhasználó a Beállításokból letöltheti a saját fiókadatait JSON-fájlként, helyesbítheti adatait és kezdeményezheti fiókja törlését. A fióktörlés a coach-profil képeit is eltávolítja a privát tárhelyről.
-- A regisztrációs szerepkört az adatbázis nem fogadja el a felhasználó által megadott metaadatból. Edzői jelentkezésnél a profil csak függőben lévő kérelmet kap; az adminisztrátor csak megerősített e-mail-cím után, szerveroldali Edge Functionnel adhat edzői szerepkört.
+- A regisztrációkor csak a `client` és a `trainer` szerepkör választható; az admin szerepkört az adatbázis nem fogadja el metaadatból, azt kizárólag admin adhat szerveroldali Edge Functionnel.
 - Az alkalmazás adatai kizárólag a Supabase projektben tárolódnak; az alkalmazás nem másolja az adatbázis tartalmát a böngésző `localStorage`-kulcsaiba.
 - Eltávolítottuk a Google Fonts hívásokat. Az alkalmazás jelenlegi kódja nem használ marketing/analitikai trackert; helyette tájékoztató sáv és részletes böngészős tárolóleltár érhető el. A sáv bezárása nem hozzájárulás.
 

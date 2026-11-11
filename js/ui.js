@@ -22,7 +22,7 @@ import {
   setStorageNoticeDismissed
 } from "./state.js";
 import { toDateInputValue } from "./utils.js";
-import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, pendingTrainerApplications, planLabel, selectedClient, trainers } from "./helpers.js";
+import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, planLabel, selectedClient, trainers } from "./helpers.js";
 import { openModal, openUpgradeModal, renderStudioCoachModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
 import { deleteTrainer, grantAdminRole, loadAdminAccounts, loadAdminSubscriptions, loadTrainerEmails, renderAdminContent, renderAdminHome } from "./views/admin.js";
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
@@ -82,7 +82,6 @@ function routeForCurrentState() {
     if (currentView === "calendar") return "/admin/calendar";
     if (currentView === "clients") return "/admin/clients";
     if (currentView === "trainers") return "/admin/trainers";
-    if (currentView === "trainer-applications") return "/admin/trainer-applications";
     if (currentView === "administrators") return "/admin/administrators";
     if (currentView === "notifications") return "/admin/notifications";
     if (currentView === "coach-profiles") return "/admin/coach-profiles";
@@ -153,7 +152,6 @@ function restoreRouteFromUrl() {
       setSelectedClientId(segments[2]);
     } else if (segments[0] === "admin" && segments[1] === "clients") setCurrentView("clients");
     else if (segments[0] === "admin" && segments[1] === "trainers") setCurrentView("trainers");
-    else if (segments[0] === "admin" && segments[1] === "trainer-applications") setCurrentView("trainer-applications");
     else if (segments[0] === "admin" && segments[1] === "administrators") setCurrentView("administrators");
     else if (segments[0] === "admin" && segments[1] === "notifications") setCurrentView("notifications");
     else if (segments[0] === "admin" && segments[1] === "coach-profiles" && segments[2]) {
@@ -287,13 +285,13 @@ async function remoteRegister(event) {
   }
   const values = Object.fromEntries(new FormData(event.currentTarget).entries());
   try {
+    if (values.password !== values.passwordConfirm) {
+      toast("A két jelszó nem egyezik. Add meg ugyanazt a jelszót mindkét mezőben.");
+      return;
+    }
     const user = await auth.signUp(values);
     if (!user) throw new Error("A regisztráció nem indult el.");
-    if (values.role === "trainer") {
-      toast(user.email_confirmed_at
-        ? "A jelentkezésed rögzítettük. Az adminisztrátor e-mail-megerősítés után dönt az edzői hozzáférésről."
-        : "A jelentkezésed rögzítettük. Erősítsd meg az e-mail-címedet az adminisztrátori elbírálás előtt.");
-    } else if (!user.email_confirmed_at) toast("A fiók létrejött. Erősítsd meg az e-mail-címedet, majd jelentkezz be.");
+    if (!user.email_confirmed_at) toast("A fiók létrejött. Erősítsd meg az e-mail-címedet, majd jelentkezz be.");
     else toast("A fiók létrejött.");
     render();
   } catch (error) { toast(`Sikertelen regisztráció: ${error.message}`); }
@@ -301,11 +299,7 @@ async function remoteRegister(event) {
 
 function render() {
   const user = session && currentUser();
-  const workspace = user
-    ? user.trainerApplicationStatus === "pending" || user.trainerApplicationStatus === "rejected"
-      ? renderTrainerApplicationStatus(user)
-      : renderDashboard(user)
-    : renderAuth();
+  const workspace = user ? renderDashboard(user) : renderAuth();
   document.querySelector("#app").innerHTML = `${workspace}${renderStorageNotice()}`;
   translateLegacyUi();
   bindEvents();
@@ -335,12 +329,6 @@ function renderAuth() {
   </main>`;
 }
 
-function renderTrainerApplicationStatus(user) {
-  const rejected = user.trainerApplicationStatus === "rejected";
-  const emailConfirmed = user.emailConfirmed !== false;
-  return `<main class="auth-shell"><section class="auth-art"><div class="brand">Back<span>Plan</span></div><div><h1>${rejected ? "Köszönjük a jelentkezésed." : "A jelentkezésed megérkezett."}</h1><p>${rejected ? "Az adminisztrátor most nem hagyta jóvá az edzői hozzáférést." : "Az edzői munkatér az adminisztrátori elbírálásig nem érhető el."}</p></div><div class="art-footer">BackPlan · Edzői jelentkezés</div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">${rejected ? "Jelentkezés lezárva" : "Elbírálás folyamatban"}</div><h2>${rejected ? "A jelentkezésedet elutasítottuk" : "Az adminisztrátori döntésre vársz"}</h2><p>${rejected ? "Ha úgy gondolod, hogy tévedés történt, vedd fel a kapcsolatot az alkalmazás üzemeltetőjével." : `${emailConfirmed ? "Az e-mail-címed megerősítve." : "Erősítsd meg a regisztrációkor megadott e-mail-címet."} Az adminisztrátor ellenőrzi a jelentkezésedet, és jóváhagyás esetén aktiválja az edzői fiókot.`}</p><div class="legal-status" role="status">${rejected ? "Az edzői funkciókhoz nem férsz hozzá. Új jelentkezéshez fordulj az üzemeltetőhöz." : `Jelentkező: ${escapeHtml(user.name)} · Szakterület: ${escapeHtml(user.specialty || "Nincs megadva")}. Jóváhagyásig nem férsz hozzá kliens- vagy edzői munkatérhez.`}</div><div class="auth-actions"><a class="btn btn-ghost" href="/BackPlan_felhasznaloi_kezikonyv.pdf" target="_blank" rel="noopener">Felhasználói kézikönyv</a><button class="btn btn-ghost" id="logout">Kijelentkezés</button><button class="btn btn-danger" id="delete-account">Fiók törlése</button></div></div></section></main>`;
-}
-
 function renderDashboard(user) {
   const isAdmin = user.role === "admin";
   const isTrainer = user.role === "trainer";
@@ -351,7 +339,7 @@ function renderDashboard(user) {
   const settingsBtn = `<button class="nav-btn ${currentView === "settings" ? "active" : ""}" data-view="settings">Beállítások</button>`;
   const plansBtn = `<button class="nav-btn ${currentView === "training-plans" ? "active" : ""}" data-view="training-plans">Edzéstervek</button>`;
   const navigation = isAdmin
-    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
+    ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
     : isTrainer
       ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${isStudioLeaderActive() ? `<button class="nav-btn ${currentView === "team" ? "active" : ""}" data-view="team">Csapatom</button>` : ""}<button class="nav-btn ${currentView === "subscription" ? "active" : ""}" data-view="subscription">Előfizetés</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
@@ -530,19 +518,6 @@ function bindEvents() {
       select.disabled = false;
     }
   }));
-  document.querySelectorAll("[data-trainer-application]").forEach((button) => button.addEventListener("click", async () => {
-    const userId = button.dataset.userId;
-    const decision = button.dataset.trainerApplication;
-    const applicant = data.users.find((user) => user.id === userId);
-    if (!applicant || applicant.trainerApplicationStatus !== "pending") return toast("Ez a jelentkezés már nem elérhető.");
-    try {
-      await api.accountAdmin({ action: "decide-trainer-application", userId, decision });
-      await refreshRemote();
-      toast(decision === "approved" ? "Az edzői jelentkezés jóváhagyva." : "Az edzői jelentkezés elutasítva.");
-    } catch (error) {
-      toast(`Nem sikerült feldolgozni a jelentkezést: ${error.message}`);
-    }
-  }));
   document.querySelector("#calendar-previous")?.addEventListener("click", () => {
     setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1));
     setCalendarSelectedDate(toDateInputValue(calendarMonth));
@@ -693,10 +668,10 @@ function openForgotPassword() {
 }
 
 function renderPasswordReset() {
-  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">Back<span>Plan</span></div><div><h1>Válassz új jelszót.</h1><p>Az új jelszóval ismét biztonságosan beléphetsz.</p></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Jelszó visszaállítása</div><h2>Új jelszó</h2><p>Legalább 8 karaktert használj.</p><form id="reset-form"><div class="field"><label for="reset-password">Új jelszó</label><input id="reset-password" type="password" minlength="8" required /></div><button class="btn btn-dark" type="submit">Jelszó mentése</button></form></div></section></main>`;
+  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">Back<span>Plan</span></div><div><h1>Válassz új jelszót.</h1><p>Az új jelszóval ismét biztonságosan beléphetsz.</p></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Jelszó visszaállítása</div><h2>Új jelszó</h2><p>Legalább 8 karaktert használj.</p><form id="reset-form"><div class="field"><label for="reset-password">Új jelszó</label><input id="reset-password" type="password" minlength="8" required /></div><div class="field"><label for="reset-password-confirm">Új jelszó megerősítése</label><input id="reset-password-confirm" type="password" minlength="8" required /></div><button class="btn btn-dark" type="submit">Jelszó mentése</button></form></div></section></main>`;
   document.querySelector("#app").insertAdjacentHTML("beforeend", renderStorageNotice());
   bindStorageNoticeEvents();
-  document.querySelector("#reset-form").addEventListener("submit", async (event) => { event.preventDefault(); try { await auth.updatePassword(document.querySelector("#reset-password").value); window.history.replaceState({}, "", window.location.pathname); toast("A jelszó frissítve."); render(); } catch (error) { toast(`Nem sikerült menteni: ${error.message}`); } });
+  document.querySelector("#reset-form").addEventListener("submit", async (event) => { event.preventDefault(); if (document.querySelector("#reset-password").value !== document.querySelector("#reset-password-confirm").value) { toast("A két jelszó nem egyezik."); return; } try { await auth.updatePassword(document.querySelector("#reset-password").value); window.history.replaceState({}, "", window.location.pathname); toast("A jelszó frissítve."); render(); } catch (error) { toast(`Nem sikerült menteni: ${error.message}`); } });
 }
 
 function openRegistrationV2() {
@@ -704,7 +679,7 @@ function openRegistrationV2() {
     toast("A nyilvános regisztráció a jogi és szolgáltatói adatok véglegesítéséig szünetel.");
     return;
   }
-  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">Back<span>Plan</span></div><div><h1>Az új fejezeted itt kezdődik.</h1><p>Hozz létre kliensfiókot, vagy jelentkezz edzőkénti elbírálásra.</p></div><div class="art-footer">Már van fiókod? <button class="text-button" style="color:var(--teal)" id="back-login">Bejelentkezés</button></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Regisztráció · 18+</div><h2>Fiók létrehozása</h2><p>Adj meg egy e-mail-címet, amelyhez hozzáférsz a megerősítő levélhez.</p><form id="register-form"><div class="field"><label for="reg-role">Fiók típusa</label><select id="reg-role" name="role"><option value="client">Kliensként regisztrálok</option><option value="trainer">Edzőként jelentkezem</option></select></div><div class="field"><label for="reg-name">Teljes név</label><input id="reg-name" name="name" autocomplete="name" required /></div><div class="field"><label for="reg-email">E-mail-cím</label><input id="reg-email" name="email" type="email" autocomplete="email" required /></div><div class="field"><label for="reg-password">Jelszó létrehozása</label><input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required /></div><div class="field" id="reg-goal-field"><label for="reg-goal">Edzéscél (nem kötelező)</label><input id="reg-goal" name="goal" maxlength="160" placeholder="pl. Rendszeresebben szeretnék edzeni" /><small class="settings-help">Ne írj ide diagnózist, sérülést, gyógyszerelést vagy más egészségügyi adatot.</small></div><div class="field" id="reg-specialty-field" style="display:none"><label for="reg-specialty">Szakterület</label><input id="reg-specialty" name="specialty" maxlength="120" placeholder="pl. Erőnléti edzés" /></div><div class="legal-acknowledgements"><label><input type="checkbox" name="ageConfirmed" value="yes" required /> Kijelentem, hogy betöltöttem a 18. életévemet.</label><label><input type="checkbox" name="privacyAcknowledged" value="yes" required /> Elolvastam az adatkezelési tájékoztató tervezetét.</label><label><input type="checkbox" name="termsAcknowledged" value="yes" required /> Tudomásul veszem, hogy a felhasználási feltételek tervezet, és a szolgáltatás jelenleg tesztelés alatt áll.</label>${renderLegalLinks()}</div><div class="legal-status" role="status">A regisztráció most elérhető tesztelésre, de a jogi dokumentumok még tervezetek. Ne használj egészségügyi adatot. Edzői jelentkezésnél az e-mail-megerősítés után az adminisztrátor bírálja el a kérelmet; jóváhagyásig nem kapsz kliens- vagy edzői hozzáférést. A fiók létrehozása nem jelent fizetős előfizetést.</div><div class="auth-actions"><button type="button" class="text-button" id="back-login-2">Vissza a bejelentkezéshez</button><button class="btn btn-dark">Fiók létrehozása</button></div></form></div></section></main>`;
+  document.querySelector("#app").innerHTML = `<main class="auth-shell"><section class="auth-art"><div class="brand">Back<span>Plan</span></div><div><h1>Az új fejezeted itt kezdődik.</h1><p>Hozz létre kliensfiókot, vagy regisztrálj edzőként.</p></div><div class="art-footer">Már van fiókod? <button class="text-button" style="color:var(--teal)" id="back-login">Bejelentkezés</button></div></section><section class="auth-panel"><div class="auth-card"><div class="eyebrow">Regisztráció · 18+</div><h2>Fiók létrehozása</h2><p>Adj meg egy e-mail-címet, amelyhez hozzáférsz a megerősítő levélhez.</p><form id="register-form"><div class="field"><label for="reg-role">Fiók típusa</label><select id="reg-role" name="role"><option value="client">Kliensként regisztrálok</option><option value="trainer">Edzőként regisztrálok</option></select></div><div class="field"><label for="reg-name">Teljes név</label><input id="reg-name" name="name" autocomplete="name" required /></div><div class="field"><label for="reg-email">E-mail-cím</label><input id="reg-email" name="email" type="email" autocomplete="email" required /></div><div class="field"><label for="reg-password">Jelszó létrehozása</label><input id="reg-password" name="password" type="password" autocomplete="new-password" minlength="8" required /></div><div class="field"><label for="reg-password-confirm">Jelszó megerősítése</label><input id="reg-password-confirm" name="passwordConfirm" type="password" autocomplete="new-password" minlength="8" required /></div><div class="field" id="reg-goal-field"><label for="reg-goal">Edzéscél (nem kötelező)</label><input id="reg-goal" name="goal" maxlength="160" placeholder="pl. Rendszeresebben szeretnék edzeni" /><small class="settings-help">Ne írj ide diagnózist, sérülést, gyógyszerelést vagy más egészségügyi adatot.</small></div><div class="field" id="reg-specialty-field" style="display:none"><label for="reg-specialty">Szakterület</label><input id="reg-specialty" name="specialty" maxlength="120" placeholder="pl. Erőnléti edzés" /></div><div class="legal-acknowledgements"><label><input type="checkbox" name="ageConfirmed" value="yes" required /> Kijelentem, hogy betöltöttem a 18. életévemet.</label><label><input type="checkbox" name="privacyAcknowledged" value="yes" required /> Elolvastam az adatkezelési tájékoztató tervezetét.</label><label><input type="checkbox" name="termsAcknowledged" value="yes" required /> Tudomásul veszem, hogy a felhasználási feltételek tervezet, és a szolgáltatás jelenleg tesztelés alatt áll.</label>${renderLegalLinks()}</div><div class="legal-status" role="status">A regisztráció most elérhető tesztelésre, de a jogi dokumentumok még tervezetek. Ne használj egészségügyi adatot. Edzői regisztrációnál nincs külön jóváhagyás, az e-mail-megerősítés után azonnal használhatod az edzői felületet. A fiók létrehozása nem jelent fizetős előfizetést.</div><div class="auth-actions"><button type="button" class="text-button" id="back-login-2">Vissza a bejelentkezéshez</button><button class="btn btn-dark">Fiók létrehozása</button></div></form></div></section></main>`;
   const roleSelect = document.querySelector("#reg-role");
   const updateRegistrationFields = () => {
     const trainer = roleSelect.value === "trainer";

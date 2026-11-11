@@ -35,6 +35,10 @@ alter table public.profiles
   add constraint profiles_trainer_application_status_check
   check (trainer_application_status in ('none', 'pending', 'approved', 'rejected'));
 
+-- Az edzői regisztrációhoz már nem kell adminisztrátori jóváhagyás: a korábban függőben lévők edzők lesznek.
+update public.profiles set role = 'trainer', trainer_application_status = 'approved'
+where trainer_application_status = 'pending' and role = 'client';
+update public.profiles set trainer_application_status = 'none' where trainer_application_status = 'rejected';
 -- Studio csomag: a stúdióvezető fiókjára mutat; kitöltve a felhasználó beosztott al-edző.
 alter table public.profiles
   add column if not exists parent_studio_id uuid references public.profiles(id) on delete set null;
@@ -117,10 +121,7 @@ create or replace function public.current_role()
 returns public.user_role
 language sql stable security definer set search_path = public
 as $$
-  select case
-    when trainer_application_status in ('pending', 'rejected') then null
-    else role
-  end
+  select role
   from public.profiles
   where id = auth.uid();
 $$;
@@ -259,14 +260,13 @@ returns trigger
 language plpgsql security definer set search_path = public
 as $$
 begin
-  insert into public.profiles (id, full_name, role, specialty, goal, trainer_application_status)
+  insert into public.profiles (id, full_name, role, specialty, goal)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'full_name', 'Új felhasználó'),
-    'client',
-    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then new.raw_user_meta_data->>'specialty' else null end,
-    case when new.raw_user_meta_data->>'requested_role' = 'client' then new.raw_user_meta_data->>'goal' else null end,
-    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then 'pending' else 'none' end
+    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then 'trainer'::public.user_role else 'client'::public.user_role end,
+    case when new.raw_user_meta_data->>'requested_role' = 'trainer' then left(new.raw_user_meta_data->>'specialty', 120) else null end,
+    case when new.raw_user_meta_data->>'requested_role' = 'client' then left(new.raw_user_meta_data->>'goal', 160) else null end
   );
   return new;
 end;

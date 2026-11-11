@@ -14,7 +14,7 @@ A BackPlan egy online szoftver (SaaS) személyi edzők és kliensek számára: e
 ## 3. Fiók és felhasználók
 
 1. A szolgáltatás **18 éven felüli** természetes személyeknek szól.
-2. **Edzői fiók**: az edzői jogosultsághoz jelentkezés és adminisztrátori jóváhagyás szükséges.
+2. **Edzői fiók**: edzői fiókot a regisztráció során lehet választani; külön adminisztrátori jóváhagyás nincs.
 3. **Kliensfiók**: a kliens az edzőhöz kapcsolódási kérésen keresztül csatlakozik.
 4. A felhasználó köteles a valós adatait megadni, és a belépési adatait biztonságban tartani. A fiókjával végzett tevékenységért felel.
 5. **Beosztott edző (stúdió):** a Studio csomag vezetője meghívhat edzőket. A beosztott edző saját fiókot használ, amely **nem örökli** a vezető csomagját, csak azt kapja, amelyre ő maga előfizetett (alapértelmezett: Free).

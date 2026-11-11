@@ -11,7 +11,7 @@
 | # | Tevékenység | Érintettek | Adatkategóriák | Jogalap | Címzettek | Megőrzés | Biztonsági intézkedések |
 |---|---|---|---|---|---|---|---|
 | 1 | Fiókkezelés, belépés | edzők, kliensek | név, e-mail, jelszóhash, szerepkör | szerződés (6. (1) b)) | Supabase | fiók törléséig | HTTPS, jelszóhash, RLS |
-| 2 | Edzői jelentkezés és jóváhagyás | edző jelentkezők | szakterület, állapot, döntés | szerződés előtti lépés | Supabase | fiók törléséig | RLS, admini jogosultság |
+| 2 | Edzői regisztráció | edzők | szakterület, fióktípus | szerződés előtti lépés | Supabase | fiók törléséig | RLS |
 | 3 | Munkatér (edzésnapló, naptár, tervek, csoportos edzés, jegyzet) | kliensek, edzők | edzéscél, időpontok, jegyzetek, tervek | szerződés (a klienseknél az edző megbízásából, adatfeldolgozóként) | Supabase; az érintett edző(k); stúdióvezető | fiók/kapcsolat megszűnéséig | RLS, kapcsolatfüggő hozzáférés, hozzárendelési trigger |
 | 4 | Nyilvános edzői profil | edzők | bemutatkozás, szakterület, képek | hozzájárulás / szerződés | Supabase tárhely, más felhasználók | profil törléséig | tárolóbucket-policy |
 | 5 | Értesítések és kapcsolatok | edzők, kliensek | értesítés szövege, kérések | szerződés | Supabase | fiók törléséig | RLS |
