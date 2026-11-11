@@ -4,7 +4,7 @@ const outputDirectory = new URL("../dist/", import.meta.url);
 const staticFiles = [
   "index.html",
   "styles.css",
-  "legal-notices.js"
+  "appearance.css",  "legal-notices.js"
 ];
 
 await rm(outputDirectory, { recursive: true, force: true });
