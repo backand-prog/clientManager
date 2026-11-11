@@ -200,6 +200,27 @@ const scenarios = {
       raise exception 'RESULT:%', res;
     end $$;`,
 
+  "bemutatkozás és emlékeztető": `
+    do $$ declare res text := ''; t uuid := pg_temp.mk('trainer','bt'); c uuid := pg_temp.mk('client','bc'); n int; r text; s text;
+    begin
+      insert into public.client_trainers (client_id, trainer_id) values (c, t);
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (c, t, current_date - 1, '10:00', 'x', 30, 'Beütemezve');
+      perform pg_temp.as_user(t);
+      r := pg_temp.try('select public.save_coach_profile(''Erő'', ''Hosszú bemutatkozás'', ''{}''::text[], '''', '''', '''', '''', ''' || repeat('a', 201) || ''')');
+      res := res || pg_temp.chk('201 karakteres rövid bemutatkozás elutasítva', r <> 'OK');
+      r := pg_temp.try('select public.save_coach_profile(''Erő'', ''' || repeat('b', 2000) || ''', ''{}''::text[], '''', '''', '''', '''', ''' || repeat('a', 200) || ''')');
+      res := res || pg_temp.chk('200 + 2000 karakter elfogadva', r = 'OK');
+      select length(short_bio) into n from public.coach_public_profiles where id = t;
+      res := res || pg_temp.chk('rövid bemutatkozás elmentve', n = 200);
+      n := public.create_workout_status_reminder();
+      res := res || pg_temp.chk('emlékeztető a le nem zárt tegnapi edzésről', n = 1 and exists (select 1 from public.connection_notifications where user_id = t and kind = 'workout_status_reminder'));
+      n := public.create_workout_status_reminder();
+      res := res || pg_temp.chk('naponta csak egy emlékeztető', n = 0 and (select count(*) from public.connection_notifications where user_id = t and kind = 'workout_status_reminder') = 1);
+      reset role; perform pg_temp.as_user(c);
+      res := res || pg_temp.chk('kliensnek nincs emlékeztető', public.create_workout_status_reminder() = 0);
+      raise exception 'RESULT:%', res;
+    end $$;`,
+
   "stúdió RLS és csomag-öröklés": `
     do $$ declare res text := ''; h uuid := pg_temp.mk('trainer','sh'); s uuid := pg_temp.mk('trainer','ss'); o uuid := pg_temp.mk('trainer','so');
       cs uuid := pg_temp.mk('client','scs'); co uuid := pg_temp.mk('client','sco'); ch uuid := pg_temp.mk('client','sch'); n int;

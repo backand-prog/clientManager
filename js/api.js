@@ -68,6 +68,8 @@ function mapTrainingPlan(plan) {
   };
 }
 
+let reminderCheckedOn = "";
+
 export async function load() {
   if (!enabled) return null;
   const { data: authData, error } = await client.auth.getUser();
@@ -75,6 +77,13 @@ export async function load() {
   if (error) throw error;
   const user = authData?.user;
   if (!user) return null;
+  const reminderKey = `${user.id}:${new Date().toDateString()}`;
+  let reminderCount = 0;
+  if (reminderCheckedOn !== reminderKey) {
+    reminderCheckedOn = reminderKey;
+    const reminder = await client.rpc("create_workout_status_reminder");
+    if (!reminder.error) reminderCount = Number(reminder.data) || 0;
+  }
   const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult, subscriptionResult, directoryResult] = await Promise.all([
     client.from("profiles").select("*").order("created_at"),
     client.from("client_trainers").select("client_id, trainer_id"),
@@ -116,6 +125,7 @@ export async function load() {
       name: profile.display_name,
       specialty: profile.specialty || "",
       bio: profile.bio || "",
+      shortBio: profile.short_bio || "",
       phone: profile.phone || "",
       contactEmail: profile.contact_email || "",
       location: profile.location || "",
@@ -186,7 +196,8 @@ export async function load() {
       createdAt: notification.created_at,
       readAt: notification.read_at
     })),
-    coachProfiles
+    coachProfiles,
+    workoutReminderCount: reminderCount
   };
 }
 
@@ -350,7 +361,8 @@ export async function saveCoachProfile(specialty, bio, photoPaths, extras = {}) 
     profile_phone: extras.phone || "",
     profile_contact_email: extras.contactEmail || "",
     profile_location: extras.location || "",
-    profile_availability: extras.availability || ""
+    profile_availability: extras.availability || "",
+    profile_short_bio: extras.shortBio || ""
   });
   if (result.error) throw result.error;
 }

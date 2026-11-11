@@ -398,9 +398,56 @@ alter table public.connection_notifications
   drop constraint if exists connection_notifications_kind_check;
 alter table public.connection_notifications
   add constraint connection_notifications_kind_check
-  check (kind in ('request_received', 'request_sent', 'request_approved', 'request_declined', 'workout_cancelled', 'group_workout_cancelled', 'group_workout_left'));
+  check (kind in ('request_received', 'request_sent', 'request_approved', 'request_declined', 'workout_cancelled', 'group_workout_cancelled', 'group_workout_left', 'workout_status_reminder'));
 
 create index if not exists connection_notifications_user_idx on public.connection_notifications (user_id, created_at desc);
+
+-- Napi emlékeztető az edzőnek a tegnapi (és az elmúlt hét) még le nem zárt edzéseiről. Nem kötelező, csak figyelmeztet.
+create or replace function public.create_workout_status_reminder()
+returns integer
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  actor_id uuid := auth.uid();
+  today_value date := (now() at time zone 'Europe/Budapest')::date;
+  pending_count integer;
+  names text;
+begin
+  if actor_id is null or public.current_role() is distinct from 'trainer' then
+    return 0;
+  end if;
+  if exists (
+    select 1 from public.connection_notifications n
+    where n.user_id = actor_id and n.kind = 'workout_status_reminder'
+      and (n.created_at at time zone 'Europe/Budapest')::date = today_value
+  ) then
+    return 0;
+  end if;
+
+  select count(*), string_agg(distinct p.full_name, ', ')
+  into pending_count, names
+  from public.workouts w
+  join public.profiles p on p.id = w.client_id
+  where w.trainer_id = actor_id
+    and w.status = 'Beütemezve'
+    and w.workout_date < today_value
+    and w.workout_date >= today_value - 7;
+
+  if pending_count = 0 then
+    return 0;
+  end if;
+
+  insert into public.connection_notifications (user_id, request_id, kind, message)
+  values (actor_id, null, 'workout_status_reminder',
+    pending_count || ' korábbi edzésed még nincs lezárva (' || left(names, 150) || '). Jelöld meg, hogy teljesült-e vagy elmaradt. Ez nem kötelező, de segít a pontos nyilvántartásban.');
+  return pending_count;
+end;
+$$;
+
+revoke all on function public.create_workout_status_reminder() from public, anon;
+grant execute on function public.create_workout_status_reminder() to authenticated;
 
 alter table public.connection_requests enable row level security;
 alter table public.connection_notifications enable row level security;
@@ -476,6 +523,13 @@ alter table public.coach_public_profiles
   add column if not exists location text not null default '',
   add column if not exists availability text not null default '';
 
+alter table public.coach_public_profiles
+  add column if not exists short_bio text not null default '';
+alter table public.coach_public_profiles
+  drop constraint if exists coach_public_profiles_short_bio_check;
+alter table public.coach_public_profiles
+  add constraint coach_public_profiles_short_bio_check check (char_length(short_bio) <= 200);
+
 alter table public.coach_public_profiles enable row level security;
 
 drop policy if exists coach_public_profiles_authenticated_read on public.coach_public_profiles;
@@ -486,6 +540,7 @@ using (public.current_role() in ('client', 'trainer', 'admin'));
 grant select on public.coach_public_profiles to authenticated;
 
 drop function if exists public.save_coach_profile(text, text, text[]);
+drop function if exists public.save_coach_profile(text, text, text[], text, text, text, text);
 
 create or replace function public.save_coach_profile(
   profile_specialty text,
@@ -494,7 +549,8 @@ create or replace function public.save_coach_profile(
   profile_phone text default '',
   profile_contact_email text default '',
   profile_location text default '',
-  profile_availability text default ''
+  profile_availability text default '',
+  profile_short_bio text default ''
 )
 returns void
 language plpgsql
@@ -520,6 +576,9 @@ begin
   end if;
   if length(trim(coalesce(profile_bio, ''))) = 0 or length(profile_bio) > 2000 then
     raise exception 'A bemutatkozás legyen 1 és 2000 karakter között.';
+  end if;
+  if length(coalesce(profile_short_bio, '')) > 200 then
+    raise exception 'A rövid bemutatkozás legfeljebb 200 karakter lehet.';
   end if;
   if length(coalesce(profile_phone, '')) > 40 then
     raise exception 'A telefonszám legfeljebb 40 karakter lehet.';
@@ -548,12 +607,13 @@ begin
   set specialty = trim(profile_specialty)
   where id = auth.uid();
 
-  insert into public.coach_public_profiles (id, display_name, specialty, bio, phone, contact_email, location, availability, photo_paths, updated_at)
-  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), trim(coalesce(profile_phone, '')), trim(coalesce(profile_contact_email, '')), trim(coalesce(profile_location, '')), trim(coalesce(profile_availability, '')), safe_photo_paths, now())
+  insert into public.coach_public_profiles (id, display_name, specialty, bio, short_bio, phone, contact_email, location, availability, photo_paths, updated_at)
+  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), trim(coalesce(profile_short_bio, '')), trim(coalesce(profile_phone, '')), trim(coalesce(profile_contact_email, '')), trim(coalesce(profile_location, '')), trim(coalesce(profile_availability, '')), safe_photo_paths, now())
   on conflict (id) do update
   set display_name = excluded.display_name,
       specialty = excluded.specialty,
       bio = excluded.bio,
+      short_bio = excluded.short_bio,
       phone = excluded.phone,
       contact_email = excluded.contact_email,
       location = excluded.location,
@@ -563,8 +623,8 @@ begin
 end;
 $$;
 
-revoke all on function public.save_coach_profile(text, text, text[], text, text, text, text) from public;
-grant execute on function public.save_coach_profile(text, text, text[], text, text, text, text) to authenticated;
+revoke all on function public.save_coach_profile(text, text, text[], text, text, text, text, text) from public;
+grant execute on function public.save_coach_profile(text, text, text[], text, text, text, text, text) to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('coach-profile-images', 'coach-profile-images', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])

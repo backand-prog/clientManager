@@ -203,6 +203,7 @@ async function refreshRemote() {
       if (currentView === "administrators") data.adminAccounts = await api.listAdminAccounts();
       if (currentView === "subscriptions") data.adminSubscriptions = await api.listSubscriptions();
       render();
+      if (remoteData.workoutReminderCount > 0) toast(`Emlékeztető: ${remoteData.workoutReminderCount} korábbi edzésed még nincs lezárva. Részletek az Értesítések között.`);
     }
   } catch (error) { toast(`Adatbázis-hiba: ${error.message}`); }
 }
@@ -244,6 +245,7 @@ async function initializeRemote() {
       if (currentView === "administrators") data.adminAccounts = await api.listAdminAccounts();
       if (currentView === "subscriptions") data.adminSubscriptions = await api.listSubscriptions();
       render();
+      if (remoteData.workoutReminderCount > 0) toast(`Emlékeztető: ${remoteData.workoutReminderCount} korábbi edzésed még nincs lezárva. Részletek az Értesítések között.`);
       await handleCheckoutReturn();
     } else {
       setSession(null);
@@ -606,6 +608,9 @@ function bindEvents() {
       toast(`Nem sikerült elküldeni a kérést: ${error.message}`);
     }
   }));
+  document.querySelector("#coach-short-bio")?.addEventListener("input", (event) => {
+    document.querySelector("#coach-short-bio-count").textContent = event.target.value.length;
+  });
   document.querySelector("#coach-profile-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     const user = currentUser();
@@ -629,7 +634,7 @@ function bindEvents() {
         uploadedPaths.push(path);
         photos.push({ path, url: "" });
       }
-      await api.saveCoachProfile(values.specialty.trim(), values.bio.trim(), photos.map((photo) => photo.path), { phone: values.phone.trim(), contactEmail: values.contactEmail.trim(), location: values.location.trim(), availability: values.availability.trim() });
+      await api.saveCoachProfile(values.specialty.trim(), values.bio.trim(), photos.map((photo) => photo.path), { phone: values.phone.trim(), contactEmail: values.contactEmail.trim(), location: values.location.trim(), availability: values.availability.trim(), shortBio: (values.shortBio || "").trim() });
       await refreshRemote();
       toast("A bemutatkozásod mentve.");
     } catch (error) {
@@ -648,7 +653,7 @@ function bindEvents() {
     if (!profile) return;
     const remaining = profile.photos.filter((photo) => photo.path !== path);
     try {
-      await api.saveCoachProfile(profile.specialty, profile.bio, remaining.map((photo) => photo.path), { phone: profile.phone || "", contactEmail: profile.contactEmail || "", location: profile.location || "", availability: profile.availability || "" });
+      await api.saveCoachProfile(profile.specialty, profile.bio, remaining.map((photo) => photo.path), { phone: profile.phone || "", contactEmail: profile.contactEmail || "", location: profile.location || "", availability: profile.availability || "", shortBio: profile.shortBio || "" });
       await api.deleteCoachPhotos([path]);
       await refreshRemote();
       toast("A kép törölve.");

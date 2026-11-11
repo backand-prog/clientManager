@@ -7,9 +7,16 @@ import { toDateInputValue } from "./utils.js";
 
 const WORKOUT_TYPE_CATALOG = [
   "Személyi edzés", "Súlyzós edzés", "Erőnléti edzés", "Funkcionális edzés",
+  "Kondicionáló edzés", "Testsúlyos edzés", "Köredzés", "Kettlebell edzés", "TRX edzés",
   "CrossFit", "HIIT", "Kardio", "Futás", "Kerékpározás", "Úszás", "Evezés",
-  "Mobilitás és nyújtás", "Jóga", "Pilates", "Rehabilitációs edzés",
-  "Küzdősport", "Táncos edzés", "Csoportos óra", "Túrázás", "Egyéb"
+  "Mobilitás és nyújtás", "Jóga", "Pilates", "Core és törzsstabilizáció", "Rehabilitációs edzés",
+  "Küzdősport", "Box", "Táncos edzés", "Csoportos óra", "Túrázás",
+  "Masszázs", "Svéd masszázs", "Sportmasszázs", "Frissítő masszázs", "Relaxáló masszázs",
+  "Gyógymasszázs", "Mélyszöveti masszázs", "Nyirokmasszázs", "Talpmasszázs",
+  "Hátmasszázs", "Nyak- és vállmasszázs", "Indiai fejmasszázs", "Thai masszázs",
+  "Aromaterápiás masszázs", "Lávaköves masszázs", "Fascia masszázs", "Trigger pont terápia",
+  "Cupping (köpölyözés)", "Kinesio tapasz", "Habhengeres átmozgatás", "Stretching (asszisztált nyújtás)",
+  "Légzés- és relaxációs gyakorlat", "Életmód- és edzéstanácsadás", "Állapotfelmérés", "Egyéb"
 ];
 
 const EXERCISE_CATALOG = [
