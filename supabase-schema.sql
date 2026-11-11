@@ -39,15 +39,10 @@ alter table public.profiles
 update public.profiles set role = 'trainer', trainer_application_status = 'approved'
 where trainer_application_status = 'pending' and role = 'client';
 update public.profiles set trainer_application_status = 'none' where trainer_application_status = 'rejected';
--- Studio csomag: a stúdióvezető fiókjára mutat; kitöltve a felhasználó beosztott al-edző.
-alter table public.profiles
-  add column if not exists parent_studio_id uuid references public.profiles(id) on delete set null;
-alter table public.profiles
-  drop constraint if exists profiles_parent_studio_not_self;
-alter table public.profiles
-  add constraint profiles_parent_studio_not_self check (parent_studio_id is distinct from id);
-create index if not exists profiles_parent_studio_idx
-  on public.profiles (parent_studio_id) where parent_studio_id is not null;
+-- A korábbi Studio csomag csapatkezelése megszűnt: az al-edzői kapcsolat és a hozzá tartozó jogosultságok törlődnek.
+alter table public.profiles drop constraint if exists profiles_parent_studio_not_self;
+drop index if exists public.profiles_parent_studio_idx;
+alter table public.profiles drop column if exists parent_studio_id;
 
 create or replace function public.prevent_last_admin_removal()
 returns trigger
@@ -140,42 +135,6 @@ alter table public.profiles enable row level security;
 alter table public.client_trainers enable row level security;
 alter table public.workouts enable row level security;
 
--- Igaz, ha a hívó aktív Studio csomagú edző, és `member` az alá beosztott al-edző.
--- plpgsql, hogy a később létrehozott subscriptions táblára való hivatkozás ne okozzon létrehozási hibát.
-create or replace function public.is_studio_head_of(member uuid)
-returns boolean
-language plpgsql stable security definer set search_path = ''
-as $$
-begin
-  return member is not null
-    and public.current_role() = 'trainer'
-    and exists (
-      select 1 from public.profiles p
-      where p.id = member and p.parent_studio_id = auth.uid()
-    )
-    and exists (
-      select 1 from public.subscriptions s
-      where s.user_id = auth.uid() and s.plan = 'studio' and s.status in ('active', 'trialing')
-    );
-end;
-$$;
-
--- Igaz, ha a kliens a hívó stúdió valamelyik al-edzőjéhez van rendelve.
-create or replace function public.is_studio_client(client uuid)
-returns boolean
-language sql stable security definer set search_path = public
-as $$
-  select exists (
-    select 1 from public.client_trainers ct
-    where ct.client_id = client and public.is_studio_head_of(ct.trainer_id)
-  );
-$$;
-
-revoke all on function public.is_studio_head_of(uuid) from public, anon;
-revoke all on function public.is_studio_client(uuid) from public, anon;
-grant execute on function public.is_studio_head_of(uuid) to authenticated;
-grant execute on function public.is_studio_client(uuid) to authenticated;
-
 drop policy if exists profiles_read on public.profiles;
 create policy profiles_read on public.profiles for select to authenticated
 using (
@@ -184,8 +143,6 @@ using (
   or (public.current_role() = 'trainer' and exists (
     select 1 from public.client_trainers ct where ct.client_id = profiles.id and ct.trainer_id = auth.uid()
   ))
-  or public.is_studio_head_of(id)
-  or public.is_studio_client(id)
 );
 
 drop policy if exists profiles_admin_write on public.profiles;
@@ -196,12 +153,6 @@ drop policy if exists profiles_self_update on public.profiles;
 create policy profiles_self_update on public.profiles for update to authenticated
 using (id = auth.uid()) with check (id = auth.uid());
 
--- A vezető szerkesztheti az al-edzői és azok klienseinek profilját (csak az engedélyezett oszlopokat).
-drop policy if exists profiles_studio_update on public.profiles;
-create policy profiles_studio_update on public.profiles for update to authenticated
-using (public.is_studio_head_of(id) or public.is_studio_client(id))
-with check (public.is_studio_head_of(id) or public.is_studio_client(id));
-
 revoke update on public.profiles from public, anon, authenticated;
 grant update (full_name, specialty, goal, status, adherence, notes) on public.profiles to authenticated;
 
@@ -209,7 +160,6 @@ drop policy if exists assignments_read on public.client_trainers;
 create policy assignments_read on public.client_trainers for select to authenticated
 using (
   client_id = auth.uid() or trainer_id = auth.uid() or public.current_role() = 'admin'
-  or public.is_studio_head_of(trainer_id)
 );
 
 drop policy if exists assignments_admin_write on public.client_trainers;
@@ -220,7 +170,6 @@ drop policy if exists workouts_read on public.workouts;
 create policy workouts_read on public.workouts for select to authenticated
 using (
   client_id = auth.uid() or trainer_id = auth.uid() or public.is_assigned_trainer(client_id) or public.current_role() = 'admin'
-  or public.is_studio_head_of(trainer_id) or public.is_studio_client(client_id)
 );
 
 -- Kliens csak saját, edző nélküli (egyéni) edzést vehet fel. Edző a hozzá rendelt kliensnek veheti fel,
@@ -231,10 +180,6 @@ with check (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid() and trainer_id is null)
   or (public.current_role() = 'trainer' and public.is_assigned_trainer(client_id) and trainer_id is not null)
-  or (
-    public.is_studio_head_of(trainer_id)
-    and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
-  )
 );
 
 drop policy if exists workouts_update on public.workouts;
@@ -243,17 +188,15 @@ using (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and trainer_id = auth.uid())
-  or public.is_studio_head_of(trainer_id)
 )
 with check (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
   or (public.current_role() = 'trainer' and (trainer_id = auth.uid() or (public.is_assigned_trainer(client_id) and trainer_id is not null)))
-  or (
-    public.is_studio_head_of(trainer_id)
-    and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
-  )
 );
+
+-- A korábbi Studio csapatkezelés jogosultságainak eltávolítása.
+drop policy if exists profiles_studio_update on public.profiles;
 
 create or replace function public.handle_new_user()
 returns trigger
@@ -279,11 +222,16 @@ for each row execute procedure public.handle_new_user();
 
 create table if not exists public.subscriptions (
   user_id uuid primary key references public.profiles(id) on delete cascade,
-  plan text not null default 'free' check (plan in ('free', 'pro', 'studio')),
+  plan text not null default 'free' check (plan in ('free', 'pro', 'premium')),
   status text not null default 'active' check (status in ('active', 'trialing', 'past_due', 'canceled')),
   current_period_end timestamptz,
   updated_at timestamptz not null default now()
 );
+
+-- A korábbi Studio csomag Premium néven él tovább.
+alter table public.subscriptions drop constraint if exists subscriptions_plan_check;
+update public.subscriptions set plan = 'premium' where plan = 'studio';
+alter table public.subscriptions add constraint subscriptions_plan_check check (plan in ('free', 'pro', 'premium'));
 
 -- Stripe azonosítók (nullable: az ingyenes fiókoknak nincs Stripe-adatuk)
 alter table public.subscriptions
@@ -322,7 +270,7 @@ $$;
 revoke all on function public.current_plan() from public, anon;
 grant execute on function public.current_plan() to authenticated;
 
--- Csomag-limitek egy helyen. NULL = korlátlan (Studio).
+-- Csomag-limitek egy helyen. NULL = korlátlan (Premium).
 create or replace function public.plan_limit(plan_name text, limit_kind text)
 returns integer
 language sql
@@ -871,7 +819,7 @@ on public.group_workouts (trainer_id, starts_at);
 create index if not exists group_workout_registrations_client_idx
 on public.group_workout_registrations (client_id, group_workout_id);
 
--- Studio csomag: helyszín és várólista.
+-- Csoportos edzés helyszíne és várólista.
 alter table public.group_workouts
   add column if not exists location varchar(120);
 
@@ -1424,7 +1372,6 @@ as $$
       where tp.id = candidate_plan_id
         and (
           tp.trainer_id = auth.uid()
-          or public.is_studio_head_of(tp.trainer_id)
           or tp.is_public
           or exists (
             select 1
@@ -1466,7 +1413,7 @@ using (
   or exists (
     select 1 from public.training_plans tp
     where tp.id = training_plan_clients.plan_id
-      and (tp.trainer_id = auth.uid() or public.is_studio_head_of(tp.trainer_id))
+      and tp.trainer_id = auth.uid()
   )
 );
 
@@ -1529,7 +1476,7 @@ begin
   if actor_role = 'admin' then
     return new;
   elsif actor_role = 'trainer' then
-    if (new.trainer_id is distinct from auth.uid() and not public.is_studio_head_of(new.trainer_id))
+    if new.trainer_id is distinct from auth.uid()
       or plan_trainer_id is distinct from new.trainer_id
       or not exists (
         select 1 from public.client_trainers ct
@@ -1625,7 +1572,6 @@ as $$
   join public.profiles p on p.id = ct.trainer_id
   where ct.client_id = auth.uid()
     or public.is_assigned_trainer(ct.client_id)
-    or public.is_studio_client(ct.client_id)
     or public.current_role() = 'admin';
 $$;
 
@@ -1721,7 +1667,7 @@ begin
     where not exists (
       select 1 from public.client_trainers ct
       where ct.client_id = requested.client_id::uuid
-        and (ct.trainer_id = actor_id or public.is_studio_head_of(ct.trainer_id))
+        and ct.trainer_id = actor_id
     )
   ) then
     raise exception 'Csak a hozzád rendelt kliensekkel oszthatod meg az edzéstervet.';
@@ -1739,7 +1685,7 @@ begin
         is_public = public_value,
         updated_at = now()
     where id = target_plan_id
-      and (trainer_id = actor_id or public.is_studio_head_of(trainer_id));
+      and trainer_id = actor_id;
     if not found then
       raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a módosításához.';
     end if;
@@ -1882,7 +1828,7 @@ begin
     raise exception 'Edzéstervet csak bejelentkezett edző törölhet.';
   end if;
   delete from public.training_plans
-  where id = $1 and (trainer_id = auth.uid() or public.is_studio_head_of(trainer_id));
+  where id = $1 and trainer_id = auth.uid();
   if not found then
     raise exception 'Az edzésterv nem található, vagy nincs jogosultságod a törléséhez.';
   end if;
@@ -1893,3 +1839,7 @@ revoke all on function public.save_training_plan(jsonb) from public, anon;
 revoke all on function public.delete_training_plan(uuid) from public, anon;
 grant execute on function public.save_training_plan(jsonb) to authenticated;
 grant execute on function public.delete_training_plan(uuid) to authenticated;
+
+-- A Studio csapatkezelés segédfüggvényei már nem használtak.
+drop function if exists public.is_studio_head_of(uuid);
+drop function if exists public.is_studio_client(uuid);

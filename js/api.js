@@ -130,15 +130,8 @@ export async function load() {
       photos: (signedResult.data || []).map((photo) => ({ path: photo.path, url: photo.signedUrl }))
     };
   }));
-  const isStudioLeader = currentProfile?.role === "trainer"
-    && !currentProfile.parent_studio_id
-    && subscriptionResult.data?.plan === "studio"
-    && ["active", "trialing"].includes(subscriptionResult.data?.status);
-  // A csapatlista hibája nem akadályozhatja a teljes adatbetöltést.
-  const studioTeam = isStudioLeader ? await getStudioTeam().catch(() => []) : [];
   return {
     sessionId: user.id,
-    studioTeam,
     trainerDirectory: (directoryResult.data || []).map((row) => ({ clientId: row.client_id, trainerId: row.trainer_id, name: row.trainer_name })),
     subscription: {
       plan: subscriptionResult.data?.plan || "free",
@@ -151,7 +144,6 @@ export async function load() {
         id: profile.id,
         role: profile.role,
         trainerApplicationStatus: profile.trainer_application_status || "none",
-        parentStudioId: profile.parent_studio_id || null,
         name: profile.full_name,
         email: profile.id === user.id ? user.email : "",
         emailConfirmed: profile.id === user.id ? Boolean(user.email_confirmed_at) : undefined,
@@ -420,27 +412,6 @@ export async function openCustomerPortal() {
   if (result.data?.error) throw new Error(result.data.error);
   if (!result.data?.url) throw new Error("Nem érkezett ügyfélportál-hivatkozás.");
   window.location.assign(result.data.url);
-}
-
-async function studioTeamRequest(body) {
-  if (!enabled) throw new Error("A csapatkezelés csak csatlakoztatott módban érhető el.");
-  const result = await client.functions.invoke("studio-team", { body });
-  if (result.error) {
-    const detail = await result.error.context?.json?.().catch(() => null);
-    throw new Error(detail?.error || result.error.message);
-  }
-  if (result.data?.error) throw new Error(result.data.error);
-  return result.data;
-}
-
-export async function getStudioTeam() {
-  if (!enabled) return [];
-  const result = await studioTeamRequest({ action: "list" });
-  return result.team || [];
-}
-
-export async function inviteStudioCoach(email, name) {
-  return studioTeamRequest({ action: "invite", email, name });
 }
 
 export async function listTrainerAccounts() {

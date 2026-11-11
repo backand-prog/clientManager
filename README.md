@@ -32,7 +32,7 @@ Első verziós klienskezelő személyi edzők számára.
 - Az adminisztrátor külön menüpontban áttekintheti az edzők közzétett profiljait és képeit
 - Kliens-edző kapcsolódási kérések regisztrált e-mail-cím alapján, jóváhagyással vagy elutasítással
 - Edző által kezdeményezett klienskapcsolat, amelyet a kliens hagy jóvá vagy utasít el
-- Edzői csomagok (Free/Pro/Studio): Free csomagban max 3 aktív kliens, csoportos edzés max 6 fővel, legfeljebb 2 edzésterv (tervenként max 3 edzésnap); a korlátokat a szerveroldali RPC-k kényszerítik ki, az admin az Előfizetések menüpontban válthat csomagot
+- Edzői csomagok (Free/Pro/Premium): Free csomagban max 5 aktív kliens, csoportos edzés max 8 fővel, legfeljebb 2 edzésterv (tervenként max 3 edzésnap); a korlátokat a szerveroldali RPC-k kényszerítik ki, a Pro max 30 klienst és 20 fős csoportot, a Premium gyakorlatilag korlátlan kapacitást ad; az admin az Előfizetések menüpontban válthat csomagot
 - Kétoldalú, alkalmazáson belüli értesítések a kérésekről és a döntésekről
 - Supabase PostgreSQL adattárolás és Supabase Auth hitelesítés
 - Bejelentkezett felhasználók számára külön menüpontból elérhető, letölthető felhasználói kézikönyv PDF
@@ -94,7 +94,7 @@ A fizetés két Edge Functionből áll: `create-checkout-session` (JWT-hitelesí
 | Vercel | `SUPABASE_URL`, `SUPABASE_ANON_KEY` | Nyilvános; a Stripe-kulcsokat ide soha ne add meg. |
 | Supabase secrets | `STRIPE_SECRET_KEY` | `sk_test_...` / `sk_live_...` |
 | Supabase secrets | `STRIPE_WEBHOOK_SECRET` | `whsec_...`, a Stripe webhook endpoint aláíró kulcsa |
-| Supabase secrets | `STRIPE_PRICE_PRO`, `STRIPE_PRICE_STUDIO` | A Stripe `price_...` azonosítók; az ár `plan` metadata értéke `pro` / `studio` |
+| Supabase secrets | `STRIPE_PRICE_PRO`, `STRIPE_PRICE_PREMIUM` | A Stripe `price_...` azonosítók; az ár `plan` metadata értéke `pro` / `premium` |
 | Supabase secrets | `APP_URL` | A Vercel domain gyökere, záró `/` nélkül (a fizetés utáni visszairányításhoz) |
 
 A `SUPABASE_URL`, `SUPABASE_ANON_KEY` és `SUPABASE_SERVICE_ROLE_KEY` az Edge Functionök számára automatikusan elérhető.
@@ -134,7 +134,7 @@ A `.env.test` fájlt ne commitold (a `.env*` mintát a `.gitignore` tartalmazza)
 node tests/db-tests.mjs
 ```
 
-A teszt projekten (a `.env.test` `SUPABASE_ACCESS_TOKEN` értékével, vagy környezeti változóval; a projekt azonosítója felülírható a `TEST_PROJECT_REF` változóval) futtatja a csomaglimitek, a várólista, a jogosultság-emelés elleni védelem, az edzés-hozzárendelés és a stúdió RLS ellenőrzéseit. Minden forgatókönyv visszagördülő tranzakció, ezért nem marad tesztadat. Az éles projekten a script nem fut. Séma módosítása után előbb töltsd fel a teszt projektre, majd futtasd le a teszteket.
+A teszt projekten (a `.env.test` `SUPABASE_ACCESS_TOKEN` értékével, vagy környezeti változóval; a projekt azonosítója felülírható a `TEST_PROJECT_REF` változóval) futtatja a csomaglimitek, a várólista, a jogosultság-emelés elleni védelem, az edzés-hozzárendelés és a jogosultsági (RLS) ellenőrzéseket. Minden forgatókönyv visszagördülő tranzakció, ezért nem marad tesztadat. Az éles projekten a script nem fut. Séma módosítása után előbb töltsd fel a teszt projektre, majd futtasd le a teszteket.
 
 ## Helyi futtatás
 

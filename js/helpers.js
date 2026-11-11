@@ -64,7 +64,7 @@ export function selectedClient() { return data.users.find((user) => user.id === 
 
 export function currentPlan() { return data.subscription?.plan || "free"; }
 
-export function planLabel(plan = currentPlan()) { return { free: "Free", pro: "Pro", studio: "Studio" }[plan] || "Free"; }
+export function planLabel(plan = currentPlan()) { return { free: "Free", pro: "Pro", premium: "Premium" }[plan] || "Free"; }
 
 export function workoutDateToInputValue(value) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return value;

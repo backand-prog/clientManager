@@ -12,7 +12,7 @@ const adminClient = createClient(
   Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
 );
 
-const PAID_PLANS = ["pro", "studio"];
+const PAID_PLANS = ["pro", "premium"];
 
 const respond = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json" } });
@@ -20,13 +20,15 @@ const respond = (body: unknown, status = 200) =>
 const idOf = (value: string | { id: string } | null | undefined) =>
   typeof value === "string" ? value : value?.id ?? null;
 
-// A csomagot az ár `plan` metadata mezőjéből olvassuk (pro | studio).
+const normalizePlan = (plan?: string) => (plan === "studio" ? "premium" : plan);
+
+// A csomagot az ár `plan` metadata mezőjéből olvassuk (pro | premium; a régi "studio" érték premiumként értelmeződik).
 function planFromSubscription(subscription: Stripe.Subscription): string | null {
   for (const item of subscription.items.data) {
-    const plan = item.price.metadata?.plan;
+    const plan = normalizePlan(item.price.metadata?.plan);
     if (plan && PAID_PLANS.includes(plan)) return plan;
   }
-  const fallback = subscription.metadata?.plan;
+  const fallback = normalizePlan(subscription.metadata?.plan);
   return fallback && PAID_PLANS.includes(fallback) ? fallback : null;
 }
 

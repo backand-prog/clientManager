@@ -163,12 +163,12 @@ function renderAdminAccounts() {
 
 function renderAdminSubscriptions() {
   const subscriptions = data.adminSubscriptions;
-  const rows = (subscriptions || []).map((sub) => `<tr><td><div class="client-cell"><div class="avatar">${initials(sub.name || "")}</div>${escapeHtml(sub.name || "Edző")}</div></td><td><span class="plan-badge plan-badge-${escapeHtml(sub.plan)}">${planLabel(sub.plan)}</span></td><td>${sub.status === "active" ? "Aktív" : escapeHtml(sub.status)}</td><td><select class="plan-select" data-set-plan-user="${escapeHtml(sub.id)}">${["free", "pro", "studio"].map((plan) => `<option value="${plan}" ${sub.plan === plan ? "selected" : ""}>${planLabel(plan)}</option>`).join("")}</select></td></tr>`).join("");
+  const rows = (subscriptions || []).map((sub) => `<tr><td><div class="client-cell"><div class="avatar">${initials(sub.name || "")}</div>${escapeHtml(sub.name || "Edző")}</div></td><td><span class="plan-badge plan-badge-${escapeHtml(sub.plan)}">${planLabel(sub.plan)}</span></td><td>${sub.status === "active" ? "Aktív" : escapeHtml(sub.status)}</td><td><select class="plan-select" data-set-plan-user="${escapeHtml(sub.id)}">${["free", "pro", "premium"].map((plan) => `<option value="${plan}" ${sub.plan === plan ? "selected" : ""}>${planLabel(plan)}</option>`).join("")}</select></td></tr>`).join("");
   const content = !subscriptions
     ? `<div class="empty-state">Előfizetések betöltése…</div>`
       : rows ? `<div class="table-wrap"><table><thead><tr><th>Edző</th><th>Csomag</th><th>Állapot</th><th>Csomag módosítása</th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="empty-state">Még nincs edzői fiók.</div>`;
-  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 5 kliens, csoportos edzés max 8 fő, 2 edzésterv. Pro: max 30 kliens, csoportos edzés max 20 fő, korlátlan edzésterv. Studio: korlátlan.</div>${content}</section>`;
+  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 5 kliens, csoportos edzés max 8 fő, 2 edzésterv. Pro: max 30 kliens, csoportos edzés max 20 fő, korlátlan edzésterv. Premium: gyakorlatilag korlátlan kliens és edzésterv.</div>${content}</section>`;
 }
 
 function renderAdminCoachProfiles() {

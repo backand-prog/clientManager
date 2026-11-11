@@ -139,7 +139,7 @@ Deno.serve(async (request) => {
       if (typeof body.userId !== "string" || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(body.userId)) {
         return json({ error: "Érvénytelen felhasználó." }, 400);
       }
-      if (!["free", "pro", "studio"].includes(body.plan)) {
+      if (!["free", "pro", "premium"].includes(body.plan)) {
         return json({ error: "Érvénytelen csomag." }, 400);
       }
       const { data: target, error: targetError } = await adminClient

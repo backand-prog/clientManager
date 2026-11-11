@@ -50,10 +50,6 @@ Az adatokat az Adatfeldolgozó az EGT-n belül (Frankfurt) tárolja. Az amerikai
 | Resend Inc. | tranzakciós e-mailek | Írország, EU |
 | Stripe | fizetés (az edző számlázási adatai) | EU/USA |
 
-## 7. Stúdió csomag (csapatkezelés)
-
-A Studio csomag vezetője a stúdióhoz tartozó beosztott edzők és azok klienseinek adatait **megtekintheti és szerkesztheti**. A vezető és a beosztott edző közötti adatkezelési viszonyt (pl. munkaszerződés, közös adatkezelés) a stúdió rendezi. A beosztott edzőt a stúdióvezetői meghívásakor tájékoztatni kell erről. [Az ügyvéd ellenőrzi.]
-
-## 8. Felelősség
+## 7. Felelősség
 
 A felelősségre az ÁSZF 10. pontja és a GDPR 82. cikke az irányadó.

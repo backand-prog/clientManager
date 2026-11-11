@@ -17,7 +17,6 @@ A BackPlan egy online szoftver (SaaS) személyi edzők és kliensek számára: e
 2. **Edzői fiók**: edzői fiókot a regisztráció során lehet választani; külön adminisztrátori jóváhagyás nincs.
 3. **Kliensfiók**: a kliens az edzőhöz kapcsolódási kérésen keresztül csatlakozik.
 4. A felhasználó köteles a valós adatait megadni, és a belépési adatait biztonságban tartani. A fiókjával végzett tevékenységért felel.
-5. **Beosztott edző (stúdió):** a Studio csomag vezetője meghívhat edzőket. A beosztott edző saját fiókot használ, amely **nem örökli** a vezető csomagját, csak azt kapja, amelyre ő maga előfizetett (alapértelmezett: Free).
 
 ## 4. Csomagok és díjak
 
@@ -25,9 +24,9 @@ A BackPlan egy online szoftver (SaaS) személyi edzők és kliensek számára: e
 |---|---|---|---|
 | Free | legfeljebb 5 | legfeljebb 8 fő | legfeljebb 2 |
 | Pro | legfeljebb 30 | legfeljebb 20 fő | korlátlan |
-| Studio | korlátlan | korlátlan (technikai maximum: 100 fő) | korlátlan + csapatkezelés |
+| Premium | gyakorlatilag korlátlan | gyakorlatilag korlátlan (technikai maximum: 100 fő) | korlátlan |
 
-Az **árakat**, az adót (ÁFA) és a számlázási ciklust az előfizetés megvásárlásakor, a Stripe fizetési oldalon jelenítjük meg: [PRO ÁR] / [STUDIO ÁR] [havonta / évente], az ÁFÁ-t [tartalmazza / nem tartalmazza]. A Szolgáltató a díjakat az ismertetett módon módosíthatja, az új díj a következő számlázási időszaktól érvényes, a változásról legalább [30 nappal] korábban értesít.
+Az **árakat**, az adót (ÁFA) és a számlázási ciklust az előfizetés megvásárlásakor, a Stripe fizetési oldalon jelenítjük meg: [PRO ÁR] / [PREMIUM ÁR] [havonta / évente], az ÁFÁ-t [tartalmazza / nem tartalmazza]. A Szolgáltató a díjakat az ismertetett módon módosíthatja, az új díj a következő számlázási időszaktól érvényes, a változásról legalább [30 nappal] korábban értesít.
 
 ## 5. Fizetés, megújulás, lemondás
 

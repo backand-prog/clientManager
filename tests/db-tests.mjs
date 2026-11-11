@@ -1,4 +1,4 @@
-// Adatbázis-tesztek: csomaglimitek, várólista, jogosultságok, stúdió RLS.
+// Adatbázis-tesztek: csomaglimitek, várólista, jogosultságok, Premium csomag.
 // Futtatás: node tests/db-tests.mjs  (a TESZT Supabase projekten; élesen nem fut)
 // Szükséges: SUPABASE_ACCESS_TOKEN (környezeti változó vagy .env.test), séma előzetesen feltöltve a teszt projektre.
 // Minden forgatókönyv egy tranzakcióban fut, a végén szándékosan visszagördül, így nem marad tesztadat.
@@ -52,7 +52,7 @@ const scenarios = {
       res := res || pg_temp.chk('pro: 30 kliens', public.plan_limit('pro','clients') = 30);
       res := res || pg_temp.chk('pro: 20 fős csoport', public.plan_limit('pro','group_capacity') = 20);
       res := res || pg_temp.chk('pro: korlátlan edzésterv', public.plan_limit('pro','training_plans') is null);
-      res := res || pg_temp.chk('studio: korlátlan', public.plan_limit('studio','clients') is null and public.plan_limit('studio','group_capacity') is null and public.plan_limit('studio','training_plans') is null);
+      res := res || pg_temp.chk('premium: korlátlan', public.plan_limit('premium','clients') is null and public.plan_limit('premium','group_capacity') is null and public.plan_limit('premium','training_plans') is null);
       raise exception 'RESULT:%', res;
     end $$;`,
 
@@ -61,11 +61,9 @@ const scenarios = {
       perform pg_temp.as_user(c);
       r := pg_temp.try('update public.profiles set role = ''admin'' where id = ''' || c || '''');
       res := res || pg_temp.chk('kliens nem teheti magát adminná', r <> 'OK');
-      r := pg_temp.try('update public.profiles set parent_studio_id = ''' || c || ''' where id = ''' || c || '''');
-      res := res || pg_temp.chk('parent_studio_id nem írható', r <> 'OK');
-      r := pg_temp.try('update public.subscriptions set plan = ''studio'' where user_id = ''' || c || '''');
+      r := pg_temp.try('update public.subscriptions set plan = ''premium'' where user_id = ''' || c || '''');
       res := res || pg_temp.chk('csomag nem módosítható', r <> 'OK');
-      r := pg_temp.try('insert into public.subscriptions (user_id, plan) values (gen_random_uuid(), ''studio'')');
+      r := pg_temp.try('insert into public.subscriptions (user_id, plan) values (gen_random_uuid(), ''premium'')');
       res := res || pg_temp.chk('előfizetés nem szúrható be', r <> 'OK');
       res := res || pg_temp.chk('kliens csomagja free', public.current_plan() = 'free');
       raise exception 'RESULT:%', res;
@@ -237,39 +235,7 @@ const scenarios = {
       perform pg_temp.as_user(u1);
       res := res || pg_temp.chk('az új edző current_role-ja trainer', public.current_role()::text = 'trainer');
       raise exception 'RESULT:%', res;
-    end $$;`,
-
-  "stúdió RLS és csomag-öröklés": `
-    do $$ declare res text := ''; h uuid := pg_temp.mk('trainer','sh'); s uuid := pg_temp.mk('trainer','ss'); o uuid := pg_temp.mk('trainer','so');
-      cs uuid := pg_temp.mk('client','scs'); co uuid := pg_temp.mk('client','sco'); ch uuid := pg_temp.mk('client','sch'); n int;
-    begin
-      update public.subscriptions set plan = 'studio' where user_id = h;
-      update public.profiles set parent_studio_id = h where id = s;
-      insert into public.client_trainers (client_id, trainer_id) values (cs, s), (co, o), (ch, h);
-      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values
-        (cs, s, current_date, '10:00', 'sub', 30, 'Beütemezve'), (co, o, current_date, '10:00', 'other', 30, 'Beütemezve'), (ch, h, current_date, '10:00', 'head', 30, 'Beütemezve');
-
-      perform pg_temp.as_user(h);
-      select count(*) into n from public.workouts where workout_type = 'sub';
-      res := res || pg_temp.chk('vezető látja az al-edző edzéseit', n = 1);
-      select count(*) into n from public.workouts where workout_type = 'other';
-      res := res || pg_temp.chk('vezető nem látja idegen edző edzéseit', n = 0);
-      select count(*) into n from public.profiles where id = cs;
-      res := res || pg_temp.chk('vezető látja az al-edző kliensprofilját', n = 1);
-
-      reset role; perform pg_temp.as_user(s);
-      select count(*) into n from public.workouts where workout_type = 'head';
-      res := res || pg_temp.chk('al-edző nem látja a vezető klienseit', n = 0);
-      select count(*) into n from public.workouts where workout_type = 'sub';
-      res := res || pg_temp.chk('al-edző látja a sajátját', n = 1);
-      res := res || pg_temp.chk('al-edző NEM örökli a Studio csomagot', public.current_plan() = 'free');
-
-      reset role; update public.subscriptions set status = 'canceled' where user_id = h; perform pg_temp.as_user(h);
-      select count(*) into n from public.workouts where workout_type = 'sub';
-      res := res || pg_temp.chk('lemondott Studio csomagnál megszűnik a hozzáférés', n = 0);
-      raise exception 'RESULT:%', res;
-    end $$;`
-};
+    end $$;`};
 
 async function run(sql) {
   const response = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {

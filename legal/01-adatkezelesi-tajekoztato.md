@@ -42,7 +42,7 @@ A BackPlan **nem alkalmas** egészségügyi adatok kezelésére. Kérjük, ne r�
 | Resend Inc. | adatfeldolgozó | tranzakciós e-mailek küldése | EU (Írország, `eu-west-1`) |
 | jsDelivr (CDN) | technikai szolgáltató | a Supabase JavaScript kliens betöltése | globális |
 
-Az **edződ** látja a hozzá kapcsolódott kliensek munkatér-adatait, a **stúdióvezető** a stúdióhoz tartozó edzők és azok kliensei adatait. Az adatokat marketing célra nem adjuk át, és nem értékesítjük.
+Az **edződ** látja a hozzá kapcsolódott kliensek munkatér-adatait. Az adatokat marketing célra nem adjuk át, és nem értékesítjük.
 
 ## 5. Adattovábbítás az EGT-n kívülre
 

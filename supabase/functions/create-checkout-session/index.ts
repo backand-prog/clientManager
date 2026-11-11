@@ -17,7 +17,7 @@ const stripe = new Stripe(Deno.env.get("STRIPE_SECRET_KEY") ?? "", {
 // Árak: a Stripe Dashboardon létrehozott price_... azonosítók secretként.
 const prices: Record<string, string | undefined> = {
   pro: Deno.env.get("STRIPE_PRICE_PRO"),
-  studio: Deno.env.get("STRIPE_PRICE_STUDIO")
+  premium: Deno.env.get("STRIPE_PRICE_PREMIUM") ?? Deno.env.get("STRIPE_PRICE_STUDIO")
 };
 
 Deno.serve(async (req) => {
