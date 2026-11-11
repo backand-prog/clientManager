@@ -198,7 +198,7 @@ export function calendarClientsFor(user) {
 export function trainingPlanDayLabel(dayId) {
   if (!dayId) return "";
   for (const plan of data.trainingPlans || []) {
-    const day = (plan.days || []).find((item) => item.id === dayId);
+    const day = [...(plan.days || []), ...(plan.archivedDays || [])].find((item) => item.id === dayId);
     if (day) return `${plan.title} · ${day.title}`;
   }
   return "";

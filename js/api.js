@@ -36,6 +36,23 @@ function mapGroupWorkout(workout) {
   };
 }
 
+function mapPlanDay(day) {
+  return {
+    id: day.id,
+    title: day.title,
+    notes: day.notes || "",
+    exercises: (day.training_plan_exercises || [])
+      .sort((a, b) => a.position - b.position)
+      .map((exercise) => ({
+        name: exercise.name,
+        sets: exercise.sets,
+        reps: exercise.reps,
+        restSeconds: exercise.rest_seconds,
+        notes: exercise.notes || ""
+      }))
+  };
+}
+
 function mapTrainingPlan(plan) {
   return {
     id: plan.id,
@@ -46,22 +63,8 @@ function mapTrainingPlan(plan) {
     isPublic: Boolean(plan.is_public),
     clientIds: (plan.training_plan_clients || []).map((assignment) => assignment.client_id),
     updatedAt: plan.updated_at,
-    days: (plan.training_plan_days || [])
-      .sort((a, b) => a.day_number - b.day_number)
-      .map((day) => ({
-        id: day.id,
-        title: day.title,
-        notes: day.notes || "",
-        exercises: (day.training_plan_exercises || [])
-          .sort((a, b) => a.position - b.position)
-          .map((exercise) => ({
-            name: exercise.name,
-            sets: exercise.sets,
-            reps: exercise.reps,
-            restSeconds: exercise.rest_seconds,
-            notes: exercise.notes || ""
-          }))
-      }))
+    days: (plan.training_plan_days || []).filter((day) => !day.archived_at).sort((a, b) => a.day_number - b.day_number).map(mapPlanDay),
+    archivedDays: (plan.training_plan_days || []).filter((day) => day.archived_at).map(mapPlanDay)
   };
 }
 

@@ -1322,6 +1322,10 @@ create table if not exists public.training_plan_days (
 alter table public.training_plan_days
   drop constraint if exists training_plan_days_plan_id_day_number_key;
 
+-- A már teljesített edzések által használt, később módosított napok régi verziója archiválva marad.
+alter table public.training_plan_days
+  add column if not exists archived_at timestamptz;
+
 alter table public.workouts
   add column if not exists training_plan_day_id uuid references public.training_plan_days(id) on delete set null;
 
@@ -1441,6 +1445,14 @@ declare
   plan_is_public boolean;
 begin
   if new.training_plan_day_id is null then
+    return new;
+  end if;
+
+  -- Ugyanannak a tervnek egy másik verziójára való átállás (terv módosításakor) nem jelent új hozzáférést.
+  if tg_op = 'UPDATE' and old.training_plan_day_id is not null
+    and new.client_id = old.client_id and new.trainer_id is not distinct from old.trainer_id
+    and (select plan_id from public.training_plan_days where id = new.training_plan_day_id)
+        is not distinct from (select plan_id from public.training_plan_days where id = old.training_plan_day_id) then
     return new;
   end if;
 
@@ -1587,6 +1599,12 @@ declare
   rest_value integer;
   day_title text;
   day_notes text;
+  cur_day uuid;
+  skip_exercises boolean;
+  old_title text;
+  old_notes text;
+  old_content jsonb;
+  new_content jsonb;
 begin
   if actor_id is null or public.current_role() is distinct from 'trainer' then
     raise exception 'Edzéstervet csak bejelentkezett edző hozhat létre vagy módosíthat.';
@@ -1668,9 +1686,6 @@ begin
   end if;
 
   delete from public.training_plan_clients where training_plan_clients.plan_id = target_plan_id;
-  delete from public.training_plan_exercises tpe
-  using public.training_plan_days tpd
-  where tpe.day_id = tpd.id and tpd.plan_id = target_plan_id;
 
   insert into public.training_plan_clients (plan_id, client_id)
   select target_plan_id, value::uuid
@@ -1699,21 +1714,55 @@ begin
         payload_day_id := null;
       end;
     end if;
+    skip_exercises := false;
     if payload_day_id is not null then
-      update public.training_plan_days
-      set day_number = day_number_value, title = day_title, notes = day_notes
-      where id = payload_day_id and plan_id = target_plan_id
-      returning id into day_id;
+      select tpd.id, tpd.title, tpd.notes into day_id, old_title, old_notes
+      from public.training_plan_days tpd
+      where tpd.id = payload_day_id and tpd.plan_id = target_plan_id and tpd.archived_at is null;
     end if;
+    cur_day := day_id;
     if day_id is null then
       insert into public.training_plan_days (plan_id, day_number, title, notes)
       values (target_plan_id, day_number_value, day_title, day_notes)
       returning id into day_id;
+    elsif exists (select 1 from public.workouts w where w.training_plan_day_id = cur_day and w.status = 'Teljesítve') then
+      -- Már teljesített edzés is használja ezt a napot: a régi verzió változatlanul megmarad (archiválva),
+      -- a módosítás csak az új verzióra és a még el nem végzett edzésekre vonatkozik.
+      begin
+        select coalesce(jsonb_agg(jsonb_build_object(
+          'name', trim(t.e->>'name'), 'sets', (t.e->>'sets')::integer, 'reps', trim(t.e->>'reps'),
+          'rest', nullif(t.e->>'restSeconds', '')::integer, 'notes', coalesce(t.e->>'notes', '')
+        ) order by t.ord), '[]'::jsonb) into new_content
+        from jsonb_array_elements(day_value->'exercises') with ordinality as t(e, ord);
+      exception when others then
+        raise exception 'Ellenőrizd a gyakorlat nevét, sorozatait, ismétléseit, pihenőidejét és megjegyzését.';
+      end;
+      select coalesce(jsonb_agg(jsonb_build_object(
+        'name', tpe.name, 'sets', tpe.sets, 'reps', tpe.reps,         'rest', tpe.rest_seconds, 'notes', coalesce(tpe.notes, '')
+      ) order by tpe.position), '[]'::jsonb) into old_content
+      from public.training_plan_exercises tpe where tpe.day_id = cur_day;
+
+      if old_title is not distinct from day_title and old_notes is not distinct from day_notes and old_content = new_content then
+        update public.training_plan_days set day_number = day_number_value where id = cur_day;
+        skip_exercises := true;
+      else
+        update public.training_plan_days set archived_at = now() where id = cur_day;
+        insert into public.training_plan_days (plan_id, day_number, title, notes)
+        values (target_plan_id, day_number_value, day_title, day_notes)
+        returning id into day_id;
+        update public.workouts set training_plan_day_id = day_id
+        where training_plan_day_id = cur_day and status <> 'Teljesítve';
+      end if;
+    else
+      update public.training_plan_days
+      set day_number = day_number_value, title = day_title, notes = day_notes
+      where id = cur_day;
+      delete from public.training_plan_exercises tpe where tpe.day_id = cur_day;
     end if;
     kept_day_ids := array_append(kept_day_ids, day_id);
 
     exercise_position := 0;
-    for exercise_value in select value from jsonb_array_elements(day_value->'exercises') loop
+    for exercise_value in select value from jsonb_array_elements(case when skip_exercises then '[]'::jsonb else day_value->'exercises' end) loop
       exercise_position := exercise_position + 1;
       begin
         sets_value := (exercise_value->>'sets')::integer;
@@ -1745,8 +1794,18 @@ begin
     end loop;
   end loop;
 
+  -- Eltávolított napok: a még el nem végzett edzések leválnak róla, a teljesítettek miatt a nap archiválva megmarad.
+  update public.workouts set training_plan_day_id = null
+  where status <> 'Teljesítve'
+    and training_plan_day_id in (
+      select tpd.id from public.training_plan_days tpd
+      where tpd.plan_id = target_plan_id and tpd.archived_at is null and not (tpd.id = any(kept_day_ids))
+    );
+  update public.training_plan_days tpd set archived_at = now()
+  where tpd.plan_id = target_plan_id and tpd.archived_at is null and not (tpd.id = any(kept_day_ids))
+    and exists (select 1 from public.workouts w where w.training_plan_day_id = tpd.id and w.status = 'Teljesítve');
   delete from public.training_plan_days
-  where plan_id = target_plan_id and not (id = any(kept_day_ids));
+  where plan_id = target_plan_id and archived_at is null and not (id = any(kept_day_ids));
 
   return target_plan_id;
 end;

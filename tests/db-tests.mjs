@@ -164,6 +164,42 @@ const scenarios = {
       raise exception 'RESULT:%', res;
     end $$;`,
 
+  "edzésterv módosítása: teljesített edzések érintetlenek": `
+    do $$ declare res text := ''; t uuid := pg_temp.mk('trainer','pt'); c uuid := pg_temp.mk('client','pc'); p uuid; d1 uuid; d2 uuid; wd uuid; wp uuid; wd2 uuid; r text; n int; nd uuid; ttl text;
+    begin
+      insert into public.client_trainers (client_id, trainer_id) values (c, t);
+      perform pg_temp.as_user(t);
+      p := public.save_training_plan(jsonb_build_object('title','T','description','','isPublic',false,'clientIds',jsonb_build_array(c),
+        'days', jsonb_build_array(
+          jsonb_build_object('title','A','notes','','exercises',jsonb_build_array(jsonb_build_object('name','Guggolás','sets',3,'reps','10','restSeconds',60,'notes',''))),
+          jsonb_build_object('title','B','notes','','exercises',jsonb_build_array(jsonb_build_object('name','Húzódzkodás','sets',3,'reps','5','restSeconds',null,'notes',''))))));
+      select id into d1 from public.training_plan_days where plan_id = p and title = 'A';
+      select id into d2 from public.training_plan_days where plan_id = p and title = 'B';
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status, training_plan_day_id) values (c, t, current_date - 3, '10:00', 'x', 30, 'Teljesítve', d1) returning id into wd;
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status, training_plan_day_id) values (c, t, current_date + 3, '10:00', 'x', 30, 'Beütemezve', d1) returning id into wp;
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status, training_plan_day_id) values (c, t, current_date - 2, '10:00', 'x', 30, 'Teljesítve', d2) returning id into wd2;
+      -- A módosítása, B változatlan
+      perform public.save_training_plan(jsonb_build_object('id',p,'title','T','description','','isPublic',false,'clientIds',jsonb_build_array(c),
+        'days', jsonb_build_array(
+          jsonb_build_object('id',d1,'title','A2','notes','','exercises',jsonb_build_array(jsonb_build_object('name','Felhúzás','sets',5,'reps','5','restSeconds',90,'notes',''))),
+          jsonb_build_object('id',d2,'title','B','notes','','exercises',jsonb_build_array(jsonb_build_object('name','Húzódzkodás','sets',3,'reps','5','restSeconds',null,'notes',''))))));
+      select title into ttl from public.training_plan_days where id = d1;
+      res := res || pg_temp.chk('a teljesített edzés napja változatlan marad', ttl = 'A' and (select training_plan_day_id from public.workouts where id = wd) = d1);
+      select count(*) into n from public.training_plan_exercises where day_id = d1 and name = 'Guggolás';
+      res := res || pg_temp.chk('a régi gyakorlatok megmaradnak', n = 1);
+      select training_plan_day_id into nd from public.workouts where id = wp;
+      res := res || pg_temp.chk('a még el nem végzett edzés az új verzióra mutat', nd <> d1 and (select title from public.training_plan_days where id = nd) = 'A2' and (select archived_at from public.training_plan_days where id = d1) is not null);
+      res := res || pg_temp.chk('a változatlan nap nem archiválódik', (select archived_at from public.training_plan_days where id = d2) is null and (select training_plan_day_id from public.workouts where id = wd2) = d2);
+      -- B napot töröljük
+      perform public.save_training_plan(jsonb_build_object('id',p,'title','T','description','','isPublic',false,'clientIds',jsonb_build_array(c),
+        'days', jsonb_build_array(
+          jsonb_build_object('id',nd,'title','A2','notes','','exercises',jsonb_build_array(jsonb_build_object('name','Felhúzás','sets',5,'reps','5','restSeconds',90,'notes',''))))));
+      res := res || pg_temp.chk('törölt napot teljesített edzés miatt megőrzi (archiválva)', (select archived_at from public.training_plan_days where id = d2) is not null and (select training_plan_day_id from public.workouts where id = wd2) = d2);
+      select count(*) into n from public.training_plan_days where plan_id = p and archived_at is null;
+      res := res || pg_temp.chk('egy aktív nap maradt', n = 1);
+      raise exception 'RESULT:%', res;
+    end $$;`,
+
   "stúdió RLS és csomag-öröklés": `
     do $$ declare res text := ''; h uuid := pg_temp.mk('trainer','sh'); s uuid := pg_temp.mk('trainer','ss'); o uuid := pg_temp.mk('trainer','so');
       cs uuid := pg_temp.mk('client','scs'); co uuid := pg_temp.mk('client','sco'); ch uuid := pg_temp.mk('client','sch'); n int;
