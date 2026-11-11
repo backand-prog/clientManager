@@ -424,6 +424,11 @@ export async function inviteStudioCoach(email, name) {
   return studioTeamRequest({ action: "invite", email, name });
 }
 
+export async function listTrainerAccounts() {
+  if (!enabled) return [];
+  const result = await accountAdmin({ action: "list-trainer-accounts" });
+  return result.accounts || [];
+}
 export async function listSubscriptions() {
   if (!enabled) return [];
   const result = await accountAdmin({ action: "list-subscriptions" });

@@ -111,6 +111,25 @@ Deno.serve(async (request) => {
       return json({ accounts });
     }
 
+    if (body.action === "list-trainer-accounts") {
+      const { data: profiles, error: profilesError } = await adminClient
+        .from("profiles")
+        .select("id")
+        .eq("role", "trainer");
+      if (profilesError) return json({ error: profilesError.message }, 500);
+
+      const accounts = await Promise.all((profiles || []).map(async (profile) => {
+        const { data, error: userError } = await adminClient.auth.admin.getUserById(profile.id);
+        if (userError) throw userError;
+        return {
+          id: profile.id,
+          email: data.user?.email || "",
+          emailConfirmed: Boolean(data.user?.email_confirmed_at)
+        };
+      }));
+      return json({ accounts });
+    }
+
     if (body.action === "list-subscriptions") {
       const { data: trainers, error: trainersError } = await adminClient
         .from("profiles")

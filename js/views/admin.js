@@ -174,7 +174,7 @@ function renderAdminCoachProfiles() {
 
 function renderTrainers() {
   const trainerList = trainers();
-  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzők</div><h1>Edzők</h1><p>Az edzői fiókokat és hozzáféréseket itt kezelheted.</p></div><button class="btn btn-teal" id="add-trainer">+ Új edző</button></div><section class="panel"><div class="table-wrap"><table><thead><tr><th>Edző</th><th>Szakterület</th><th>Hozzárendelt kliens</th><th></th></tr></thead><tbody>${trainerList.length ? trainerList.map((trainer) => `<tr><td><div class="client-cell"><div class="avatar">${initials(trainer.name)}</div>${escapeHtml(trainer.name)}</div><small>${escapeHtml(trainer.email || "")}</small></td><td>${escapeHtml(trainer.specialty || "Általános edzés")}</td><td>${data.users.filter((client) => client.role === "client" && (client.trainerIds || []).includes(trainer.id)).length}</td><td><button class="text-button btn-delete-trainer" data-trainer-id="${trainer.id}">Törlés</button></td></tr>`).join("") : `<tr><td colspan="4"><div class="empty-state">Még nincs edző.</div></td></tr>`}</tbody></table></div></section>`;
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Edzők</div><h1>Edzők</h1><p>Az edzői fiókokat és hozzáféréseket itt kezelheted.</p></div><button class="btn btn-teal" id="add-trainer">+ Új edző</button></div><section class="panel"><div class="table-wrap"><table><thead><tr><th>Edző</th><th>Szakterület</th><th>Hozzárendelt kliens</th><th></th></tr></thead><tbody>${trainerList.length ? trainerList.map((trainer) => `<tr><td><div class="client-cell"><div class="avatar">${initials(trainer.name)}</div>${escapeHtml(trainer.name)}</div><small>${escapeHtml(trainer.email || "")}</small></td><td>${escapeHtml(trainer.specialty || "Általános edzés")}</td><td>${data.users.filter((client) => client.role === "client" && (client.trainerIds || []).includes(trainer.id)).length}</td><td><button class="text-button" data-coach-review="${escapeHtml(trainer.id)}" ${(data.coachProfiles || []).some((profile) => profile.id === trainer.id) ? "" : 'disabled title="Még nincs kitöltött bemutatkozó profil"'}>Megtekintés</button> <button class="text-button btn-delete-trainer" data-trainer-id="${trainer.id}">Törlés</button></td></tr>`).join("") : `<tr><td colspan="4"><div class="empty-state">Még nincs edző.</div></td></tr>`}</tbody></table></div></section>`;
 }
 
 function renderTrainerApplications() {
@@ -189,6 +189,21 @@ export async function loadAdminAccounts() {
     render();
   } catch (error) {
     toast(`Nem sikerült betölteni az adminisztrátori fiókokat: ${error.message}`);
+  }
+}
+
+export async function loadTrainerEmails() {
+  if (!remoteMode) return;
+  try {
+    const accounts = await api.listTrainerAccounts();
+    const emails = new Map(accounts.map((account) => [account.id, account]));
+    data.users.forEach((user) => {
+      const account = emails.get(user.id);
+      if (user.role === "trainer" && account) { user.email = account.email; user.emailConfirmed = account.emailConfirmed; }
+    });
+    render();
+  } catch (error) {
+    toast(`Nem sikerült betölteni az edzők e-mail-címét: ${error.message}`);
   }
 }
 
