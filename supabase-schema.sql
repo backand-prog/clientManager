@@ -1495,6 +1495,41 @@ for each row execute function public.validate_workout_training_plan_day();
 
 revoke all on function public.validate_workout_training_plan_day() from public, anon, authenticated;
 
+-- Biztonság: az edzés kliense nem módosítható, az edző csak a klienshez rendelt edző lehet.
+-- Admin és szerver oldali (auth.uid() nélküli) hívások mentesek.
+create or replace function public.guard_workout_assignment()
+returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if auth.uid() is null or public.current_role() = 'admin' then
+    return new;
+  end if;
+
+  if tg_op = 'UPDATE' and new.client_id is distinct from old.client_id then
+    raise exception 'Az edzés kliense nem módosítható.';
+  end if;
+
+  if new.trainer_id is not null
+    and (tg_op = 'INSERT' or new.trainer_id is distinct from old.trainer_id)
+    and not exists (
+      select 1 from public.client_trainers ct
+      where ct.client_id = new.client_id and ct.trainer_id = new.trainer_id
+    ) then
+    raise exception 'Az edző nincs a klienshez rendelve.';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists workouts_guard_assignment on public.workouts;
+create trigger workouts_guard_assignment
+before insert or update on public.workouts
+for each row execute function public.guard_workout_assignment();
+
+revoke all on function public.guard_workout_assignment() from public, anon, authenticated;
+
 create or replace function public.save_training_plan(plan_payload jsonb)
 returns uuid
 language plpgsql
