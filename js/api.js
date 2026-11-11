@@ -383,6 +383,18 @@ export async function startCheckout(plan) {
   return result.data.url;
 }
 
+export async function openCustomerPortal() {
+  if (!enabled) throw new Error("Az előfizetés-kezelés csak csatlakoztatott módban érhető el.");
+  const result = await client.functions.invoke("create-portal-session");
+  if (result.error) {
+    const detail = await result.error.context?.json?.().catch(() => null);
+    throw new Error(detail?.error || result.error.message);
+  }
+  if (result.data?.error) throw new Error(result.data.error);
+  if (!result.data?.url) throw new Error("Nem érkezett ügyfélportál-hivatkozás.");
+  window.location.assign(result.data.url);
+}
+
 export async function listSubscriptions() {
   if (!enabled) return [];
   const result = await accountAdmin({ action: "list-subscriptions" });

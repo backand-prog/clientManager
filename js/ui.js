@@ -499,6 +499,15 @@ function bindEvents() {
       toast(`Nem sikerült elindítani a fizetést: ${error.message}`);
     }
   }));
+  document.querySelectorAll("[data-manage-subscription]").forEach((button) => button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      await api.openCustomerPortal();
+    } catch (error) {
+      button.disabled = false;
+      toast(`Nem sikerült megnyitni az ügyfélportált: ${error.message}`);
+    }
+  }));
   document.querySelectorAll("[data-set-plan-user]").forEach((select) => select.addEventListener("change", async () => {
     const userId = select.dataset.setPlanUser;
     const plan = select.value;

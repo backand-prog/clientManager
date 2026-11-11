@@ -102,10 +102,31 @@ A `SUPABASE_URL`, `SUPABASE_ANON_KEY` és `SUPABASE_SERVICE_ROLE_KEY` az Edge Fu
 ```
 supabase secrets set --env-file .env
 supabase functions deploy create-checkout-session
+supabase functions deploy create-portal-session
 supabase functions deploy stripe-webhook --no-verify-jwt
 ```
 
-A Stripe webhook endpoint: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`, események: `checkout.session.completed`, `invoice.payment_succeeded`. A fizetés visszairányítása a `?checkout=success` paramétert használja; az alkalmazás ekkor értesítést jelenít meg, és frissíti a csomagot. A tesztmódú és az éles Stripe-kulcsok külön készletet alkotnak.
+A Stripe webhook endpoint: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`, események: `checkout.session.completed`, `invoice.payment_succeeded`, `invoice.payment_failed`, `customer.subscription.updated`, `customer.subscription.deleted`. A `create-portal-session` a Stripe ügyfélportált nyitja meg (lemondás, csomagváltás, fizetési mód); a portál beállításait a Stripe Dashboardon (Settings → Billing → Customer portal) külön kell menteni, tesztmódban is. A fizetés visszairányítása a `?checkout=success` paramétert használja; az alkalmazás ekkor értesítést jelenít meg, és frissíti a csomagot. A tesztmódú és az éles Stripe-kulcsok külön készletet alkotnak.
+
+## Teszt (staging) környezet
+
+Az éles és a teszt környezet teljesen különálljon, hogy tesztadat ne kerüljön az éles projektbe és fordítva.
+
+1. Hozz létre új Supabase projektet (például `backplan-test`), és ne használd benne az éles adatokat.
+2. Futtasd le benne a [supabase-schema.sql](./supabase-schema.sql) fájlt (SQL Editor), majd a [supabase/bootstrap-first-admin.sql](./supabase/bootstrap-first-admin.sql) fájlt a teszt adminhoz.
+3. Állítsd be az Edge Function secreteket a teszt projektre, **Stripe teszt kulcsokkal** (`sk_test_...`, teszt `price_...` azonosítók, a teszt webhook `whsec_...` kulcsa, `APP_URL` = a teszt/local cím):
+   ```
+   supabase link --project-ref <teszt-project-ref>
+   supabase secrets set --env-file .env.test
+   supabase functions deploy create-checkout-session
+   supabase functions deploy create-portal-session
+   supabase functions deploy stripe-webhook --no-verify-jwt
+   ```
+4. Helyi fejlesztéshez a gitignore-olt `supabase-config.js` a teszt projekt URL-jére és anon kulcsára mutasson (a Vercel production környezet változóit ne írd át).
+5. Vercel: a Preview környezetnek a teszt projekt `SUPABASE_URL` / `SUPABASE_ANON_KEY` értékét add, csak a Production kapja az éleset.
+6. Stripe: teszt módban hozz létre külön webhook endpointot a teszt projekt URL-jére, és használd a `stripe listen` / `stripe trigger` parancsokat a teszteléshez.
+
+A `.env.test` fájlt ne commitold (a `.env*` mintát a `.gitignore` tartalmazza).
 
 ## Helyi futtatás
 
