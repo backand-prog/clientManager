@@ -1,3 +1,4 @@
+import { filterAttrs, filterEmptyMessage, renderFilterBar, uniqueOptions } from "../filters.js";
 import { currentUser } from "../auth.js";
 import {
   data
@@ -58,7 +59,8 @@ function renderTrainingPlanCard(plan, user) {
         ? `Megosztva: ${plan.clientIds.map((id) => data.users.find((item) => item.id === id)?.name || "Kliens").map(escapeHtml).join(", ")}`
         : "Privát · csak te láthatod"
       : "Megosztott edzésterv";
-  return `<article class="training-plan-card">
+  const planKind = plan.isPublic ? "public" : "private";
+  return `<article class="training-plan-card"${filterAttrs(`${plan.title} ${plan.description} ${plan.trainerName} ${(plan.days || []).map((day) => day.title).join(" ")}`, { visibility: planKind, trainer: plan.trainerName || "" })}>
     <div class="training-plan-heading"><div><div class="eyebrow">${escapeHtml(plan.trainerName || (isOwner ? user.name : "BackPlan edző"))}</div><h2>${escapeHtml(plan.title)}</h2></div><div class="training-plan-actions">${isOwner ? `<button type="button" class="btn btn-ghost" data-edit-training-plan="${escapeHtml(plan.id)}">Szerkesztés</button><button type="button" class="text-button plan-delete-action" data-delete-training-plan="${escapeHtml(plan.id)}">Törlés</button>` : ""}</div></div>
     <p class="training-plan-description">${escapeHtml(plan.description || "Nincs leírás.")}</p><div class="training-plan-meta"><span class="status ${plan.isPublic ? "status-active" : "status-paused"}">${escapeHtml(sharingLabel)}</span><span>${plan.days?.length || 0} edzésnap</span></div>
     <div class="training-plan-days">${(plan.days || []).map((day, index) => `<section class="training-plan-day"><div><span class="eyebrow">Edzésnap ${index + 1}</span><h3>${escapeHtml(day.title)}</h3>${day.notes ? `<p>${escapeHtml(day.notes)}</p>` : ""}</div><div class="training-plan-exercises">${(day.exercises || []).map((exercise) => `<div class="training-plan-exercise"><strong>${escapeHtml(exercise.name)}</strong><span>${escapeHtml(exercise.sets)} × ${escapeHtml(exercise.reps)}${exercise.restSeconds !== null && exercise.restSeconds !== "" ? ` · ${escapeHtml(exercise.restSeconds)} mp pihenő` : ""}</span>${exercise.notes ? `<p>${escapeHtml(exercise.notes)}</p>` : ""}</div>`).join("")}</div></section>`).join("")}</div>
@@ -76,5 +78,5 @@ export function renderTrainingPlans(user) {
     ? "Állíts össze többnapos terveket gyakorlatokkal, majd oszd meg a kapcsolt kliensekkel vagy tedd publikussá."
     : "A neked megosztott és minden bejelentkezett felhasználó számára elérhető edzéstervek.";
   return `<div class="topbar"><div><div class="eyebrow">${isTrainer ? "Edzői tér" : "Munkatér"} / Tervezés</div><h1>Edzéstervek</h1><p>${description}</p></div>${isTrainer ? `<button type="button" class="btn btn-teal" id="add-training-plan">+ Új edzésterv</button>` : ""}</div>
-    ${plans.length ? `<div class="training-plan-list">${plans.map((plan) => renderTrainingPlanCard(plan, user)).join("")}</div>` : `<section class="panel empty-state">${isTrainer ? "Még nincs edzésterved. Hozz létre egyet, és válaszd ki, kikkel osztod meg." : "Jelenleg nincs számodra elérhető edzésterv."}</section>`}`;
+    ${plans.length ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés terv, edzésnap vagy edző neve alapján", selects: [{ key: "visibility", label: "Láthatóság", alwaysShow: plans.some((plan) => plan.isPublic) && plans.some((plan) => !plan.isPublic), options: [["public", "Publikus"], ["private", "Megosztott / privát"]] }, { key: "trainer", label: "Edző", options: uniqueOptions(plans.map((plan) => plan.trainerName)) }] })}<div class="training-plan-list">${plans.map((plan) => renderTrainingPlanCard(plan, user)).join("")}</div>${filterEmptyMessage("Nincs a szűrésnek megfelelő edzésterv.")}</div>` : `<section class="panel empty-state">${isTrainer ? "Még nincs edzésterved. Hozz létre egyet, és válaszd ki, kikkel osztod meg." : "Jelenleg nincs számodra elérhető edzésterv."}</section>`}`;
 }

@@ -328,3 +328,11 @@ tbody tr:last-child td { border-bottom: 0; }
 @media (max-width: 520px) { .dashboard-period-switch { width: 100%; } .dashboard-period-switch .btn { flex: 1; padding-inline: 8px; } .dashboard-chart { gap: 3px; } .dashboard-chart-label { font-size: .59rem; } .group-session-row { grid-template-columns: 1fr; justify-items: start; } .modal-actions { flex-direction: column-reverse; } .modal-actions .btn { width: 100%; } }
 @media (max-width: 520px) { .auth-panel { padding: 35px 22px; } .auth-actions { align-items: stretch; flex-direction: column-reverse; } .auth-actions .btn { width: 100%; } .topbar { flex-direction: column; } .topbar .btn { width: 100%; } .topbar-actions { width: 100%; flex-direction: column; } .stat-grid { gap: 9px; } .stat { padding: 14px; } .stat .number { font-size: 1.5rem; } .panel { padding: 17px; } .form-grid { grid-template-columns: 1fr; } .span-2 { grid-column: auto; } .connection-center > .panel-head, .connection-row { align-items: stretch; flex-direction: column; } .connection-center .search-row { align-items: stretch; flex-direction: column; } }
 @media (max-width: 700px) { .plan-exercise { grid-template-columns: repeat(2, minmax(0, 1fr)); } .plan-exercise .field:first-child, .plan-exercise .span-2 { grid-column: 1 / -1; } .training-plan-heading { flex-direction: column; } .training-plan-actions { width: 100%; } .training-plan-actions .btn { flex: 1; } .plan-editor-actions { flex-direction: column-reverse; } .plan-editor-actions .btn { width: 100%; } }
+
+.filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
+.filter-bar input[type="search"] { flex: 1 1 260px; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; }
+.filter-bar select { border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; background: var(--surface, #fff); color: inherit; max-width: 100%; }
+.filter-count { font-size: .8rem; color: var(--muted, #6b7280); }
+[data-filter-item][hidden], .filter-empty[hidden], [data-filter-table][hidden] { display: none !important; }
+.session-plan { margin: 2px 0 0; font-size: .8rem; font-weight: 600; color: var(--muted); }
+@media (max-width: 520px) { .filter-bar select, .filter-bar input[type="search"] { flex: 1 1 100%; } }

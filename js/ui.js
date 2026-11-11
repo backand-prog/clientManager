@@ -23,6 +23,7 @@ import {
 } from "./state.js";
 import { toDateInputValue } from "./utils.js";
 import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, planLabel, selectedClient, trainers } from "./helpers.js";
+import { bindFilters } from "./filters.js";
 import { openModal, openUpgradeModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
 import { deleteTrainer, grantAdminRole, loadAdminAccounts, loadAdminSubscriptions, loadTrainerEmails, renderAdminContent, renderAdminHome } from "./views/admin.js";
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
@@ -380,6 +381,7 @@ async function exportMyData() {
 }
 
 function bindEvents() {
+  bindFilters();
   bindStorageNoticeEvents();
   document.querySelector("#login-form")?.addEventListener("submit", remoteLogin);
   const loginForm = document.querySelector("#login-form");
@@ -653,7 +655,6 @@ function bindEvents() {
   document.querySelectorAll("[data-workout-index]").forEach((button) => button.addEventListener("click", () => openModal(renderWorkoutModalForUser(selectedClient(), selectedClient().workouts[Number(button.dataset.workoutIndex)], button.dataset.workoutIndex))));
   document.querySelector("#add-trainer")?.addEventListener("click", () => openModal(renderTrainerModal()));
   document.querySelectorAll(".btn-delete-trainer").forEach((button) => button.addEventListener("click", () => deleteTrainer(button.dataset.trainerId)));
-  document.querySelector("#client-search")?.addEventListener("input", (event) => { const needle = event.target.value.toLowerCase(); const filtered = data.users.filter((user) => user.role === "client" && `${user.name} ${user.email}`.toLowerCase().includes(needle)); document.querySelector("#client-table").innerHTML = renderClientTable(filtered); document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => navigateToView("client-detail", { clientId: button.dataset.clientId }))); });
 }
 
 function openForgotPassword() {

@@ -4,14 +4,16 @@ import {
   selectedCoachId
 } from "../state.js";
 import { coachProfileFor, escapeHtml, initials } from "../helpers.js";
+import { filterAttrs, filterEmptyMessage, renderFilterBar, uniqueOptions } from "../filters.js";
 
 export function renderCoachDirectory() {
   const profiles = data.coachProfiles || [];
   return `<div class="topbar"><div><div class="eyebrow">Felfedezés</div><h1>Edzők böngészése</h1><p>Ismerd meg az edzőket, majd küldj kapcsolódási kérést.</p></div></div>
-    ${profiles.length ? `<div class="coach-directory">${profiles.map((profile) => {
+    ${profiles.length ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés név, szakterület, helyszín vagy bemutatkozás alapján", selects: [{ key: "specialty", label: "Szakterület", options: uniqueOptions(profiles.map((profile) => profile.specialty)) }, { key: "location", label: "Helyszín", options: uniqueOptions(profiles.map((profile) => profile.location)) }, { key: "contact", label: "Elérhetőség", alwaysShow: true, options: [["email", "Van e-mail-cím"], ["photo", "Van fotó"]] }] })}<div class="coach-directory">${profiles.map((profile) => {
       const intro = profile.shortBio || (profile.bio.length > 200 ? `${profile.bio.slice(0, 197).trimEnd()}…` : profile.bio);
-      return `<article class="panel coach-card"><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>${intro ? `<p class="coach-card-intro">${escapeHtml(intro)}</p>` : `<p class="coach-card-intro muted">Az edző még nem írt rövid bemutatkozást.</p>`}<button class="btn btn-teal coach-open-profile" type="button" data-coach-profile="${escapeHtml(profile.id)}">Edző profiljának megnyitása</button></article>`;
-    }).join("")}</div>` : `<section class="panel empty-state">Még nincs közzétett edzői bemutatkozás. Nézz vissza később.</section>`}`;
+      const contactKinds = [profile.contactEmail ? "email" : "", (profile.photos || []).length ? "photo" : ""].filter(Boolean);
+      return `<article class="panel coach-card"${filterAttrs(`${profile.name} ${profile.specialty} ${profile.location} ${profile.shortBio} ${profile.bio}`, { specialty: profile.specialty, location: profile.location, contact: contactKinds.join("|") })}><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>${intro ? `<p class="coach-card-intro">${escapeHtml(intro)}</p>` : `<p class="coach-card-intro muted">Az edző még nem írt rövid bemutatkozást.</p>`}<button class="btn btn-teal coach-open-profile" type="button" data-coach-profile="${escapeHtml(profile.id)}">Edző profiljának megnyitása</button></article>`;
+    }).join("")}</div>${filterEmptyMessage("Nincs a keresésnek megfelelő edző. Próbálj másik szűrőt.")}</div>` : `<section class="panel empty-state">Még nincs közzétett edzői bemutatkozás. Nézz vissza később.</section>`}`;
 }
 
 export function renderCoachProfileDetail() {

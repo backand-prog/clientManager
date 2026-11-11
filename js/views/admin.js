@@ -8,6 +8,7 @@ import {
   setData,
   setSession
 } from "../state.js";
+import { filterAttrs, filterEmptyMessage, renderFilterBar } from "../filters.js";
 import { render, toast } from "../runtime.js";
 import { toDateInputValue } from "../utils.js";
 import { dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutTime, initials, planLabel, selectedClient, trainerName, trainers, upcomingGroupWorkouts, upcomingWorkouts, workoutDateToInputValue, workoutTrainerLabel } from "../helpers.js";
@@ -152,21 +153,21 @@ function renderAdminAccounts() {
     const action = canPromote
       ? `<button type="button" class="btn btn-ghost" data-grant-admin="${escapeHtml(account.id)}">Adminjog megadása</button>`
       : account.role === "admin" ? "Már admin" : account.role === "client" && account.emailConfirmed === false ? "E-mail-megerősítés szükséges" : "Nem emelhető adminná";
-    return `<tr><td><div class="client-cell"><div class="avatar">${initials(account.name || "")}</div>${escapeHtml(account.name || "Névtelen fiók")}</div></td><td>${escapeHtml(account.email || "Nincs elérhető e-mail-cím")}${emailStatus ? `<small class="account-email-status">${emailStatus}</small>` : ""}</td><td><span class="status ${account.role === "admin" ? "status-active" : "status-paused"}">${roleLabel}</span></td><td>${action}</td></tr>`;
+    return `<tr${filterAttrs(`${account.name} ${account.email}`, { role: account.role })}><td><div class="client-cell"><div class="avatar">${initials(account.name || "")}</div>${escapeHtml(account.name || "Névtelen fiók")}</div></td><td>${escapeHtml(account.email || "Nincs elérhető e-mail-cím")}${emailStatus ? `<small class="account-email-status">${emailStatus}</small>` : ""}</td><td><span class="status ${account.role === "admin" ? "status-active" : "status-paused"}">${roleLabel}</span></td><td>${action}</td></tr>`;
   }).join("");
   const accountContent = !accounts
     ? `<div class="empty-state">Adminisztrátori fiókok betöltése…</div>`
-    : rows ? `<div class="table-wrap admin-accounts-table"><table><thead><tr><th>Név</th><th>E-mail-cím</th><th>Szerepkör</th><th>Művelet</th></tr></thead><tbody>${rows}</tbody></table></div>`
+    : rows ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés név vagy e-mail alapján", selects: [{ key: "role", label: "Szerepkör", alwaysShow: true, options: [["client", "Kliens"], ["trainer", "Edző"], ["admin", "Adminisztrátor"]] }] })}<div class="table-wrap admin-accounts-table"><table data-filter-table><thead><tr><th>Név</th><th>E-mail-cím</th><th>Szerepkör</th><th>Művelet</th></tr></thead><tbody>${rows}</tbody></table></div>${filterEmptyMessage("Nincs a szűrésnek megfelelő fiók.")}</div>`
       : `<div class="empty-state">Nincs megjeleníthető fiók.</div>`;
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Adminisztrátorok</div><h1>Adminjogosultságok</h1><p>Regisztrált, megerősített kliensfiókok adminisztrátorrá emelése.</p></div></div><section class="panel"><div class="legal-status" role="note">Csak megerősített e-mail-című fióknak adhatsz adminjogot. Az adminisztrátorok azonos jogosultságúak; csak megbízható fióknak add meg ezt a szerepkört.</div>${accountContent}</section>`;
 }
 
 function renderAdminSubscriptions() {
   const subscriptions = data.adminSubscriptions;
-  const rows = (subscriptions || []).map((sub) => `<tr><td><div class="client-cell"><div class="avatar">${initials(sub.name || "")}</div>${escapeHtml(sub.name || "Edző")}</div></td><td><span class="plan-badge plan-badge-${escapeHtml(sub.plan)}">${planLabel(sub.plan)}</span></td><td>${sub.status === "active" ? "Aktív" : escapeHtml(sub.status)}</td><td><select class="plan-select" data-set-plan-user="${escapeHtml(sub.id)}">${["free", "pro", "premium"].map((plan) => `<option value="${plan}" ${sub.plan === plan ? "selected" : ""}>${planLabel(plan)}</option>`).join("")}</select></td></tr>`).join("");
+  const rows = (subscriptions || []).map((sub) => `<tr${filterAttrs(sub.name, { plan: sub.plan, status: sub.status })}><td><div class="client-cell"><div class="avatar">${initials(sub.name || "")}</div>${escapeHtml(sub.name || "Edző")}</div></td><td><span class="plan-badge plan-badge-${escapeHtml(sub.plan)}">${planLabel(sub.plan)}</span></td><td>${sub.status === "active" ? "Aktív" : escapeHtml(sub.status)}</td><td><select class="plan-select" data-set-plan-user="${escapeHtml(sub.id)}">${["free", "pro", "premium"].map((plan) => `<option value="${plan}" ${sub.plan === plan ? "selected" : ""}>${planLabel(plan)}</option>`).join("")}</select></td></tr>`).join("");
   const content = !subscriptions
     ? `<div class="empty-state">Előfizetések betöltése…</div>`
-      : rows ? `<div class="table-wrap"><table><thead><tr><th>Edző</th><th>Csomag</th><th>Állapot</th><th>Csomag módosítása</th></tr></thead><tbody>${rows}</tbody></table></div>`
+      : rows ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés edző neve alapján", selects: [{ key: "plan", label: "Csomag", alwaysShow: true, options: [["free", "Free"], ["pro", "Pro"], ["premium", "Premium"]] }, { key: "status", label: "Állapot", alwaysShow: true, options: [["active", "Aktív"], ["trialing", "Próba"], ["past_due", "Fizetési hiba"], ["canceled", "Lemondva"]] }] })}<div class="table-wrap"><table data-filter-table><thead><tr><th>Edző</th><th>Csomag</th><th>Állapot</th><th>Csomag módosítása</th></tr></thead><tbody>${rows}</tbody></table></div>${filterEmptyMessage("Nincs a szűrésnek megfelelő edző.")}</div>`
         : `<div class="empty-state">Még nincs edzői fiók.</div>`;
   return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 5 kliens, csoportos edzés max 8 fő, 2 edzésterv. Pro: max 30 kliens, csoportos edzés max 20 fő, korlátlan edzésterv. Premium: gyakorlatilag korlátlan kliens és edzésterv.</div>${content}</section>`;
 }

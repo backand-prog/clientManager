@@ -1,16 +1,17 @@
 import {
   data
 } from "../state.js";
+import { filterAttrs, filterEmptyMessage, renderFilterBar } from "../filters.js";
 import { currentPlan, escapeHtml, initials, nextSessionLabel, planLabel, trainerName, trainers, trainingPlanDayLabel, workoutStats, workoutTrainerLabel } from "../helpers.js";
 
 export function renderClientTable(clients) {
   if (!clients.length) return `<div class="empty-state">Még nincs kliens. Add hozzá az első klienst.</div>`;
-  return `<div class="table-wrap"><table><thead><tr><th>Kliens</th><th>Fókusz</th><th>Edzések</th><th>Teljesítés</th><th>Állapot</th><th></th></tr></thead><tbody>${clients.map((client) => `<tr><td><div class="client-cell"><div class="avatar">${initials(client.name)}</div>${escapeHtml(client.name)}</div></td><td>${escapeHtml(client.goal || "Nincs beállítva")}</td><td><strong>${(client.workouts || []).length}</strong> edzés</td><td>${workoutStats(client).adherence}%</td><td><span class="status status-${client.status === "Aktív" ? "active" : "paused"}">${escapeHtml(client.status || "Aktív")}</span></td><td><button class="text-button" data-client-id="${client.id}">Megnyitás</button></td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés név, e-mail vagy fókusz alapján", selects: [{ key: "status", label: "Állapot", alwaysShow: true, options: [["Aktív", "Aktív"], ["Szüneteltetve", "Szüneteltetve"]] }] })}<div class="table-wrap"><table data-filter-table><thead><tr><th>Kliens</th><th>Fókusz</th><th>Edzések</th><th>Teljesítés</th><th>Állapot</th><th></th></tr></thead><tbody>${clients.map((client) => `<tr${filterAttrs(`${client.name} ${client.email} ${client.goal}`, { status: client.status === "Aktív" || !client.status ? "Aktív" : "Szüneteltetve" })}><td><div class="client-cell"><div class="avatar">${initials(client.name)}</div>${escapeHtml(client.name)}</div></td><td>${escapeHtml(client.goal || "Nincs beállítva")}</td><td><strong>${(client.workouts || []).length}</strong> edzés</td><td>${workoutStats(client).adherence}%</td><td><span class="status status-${client.status === "Aktív" ? "active" : "paused"}">${escapeHtml(client.status || "Aktív")}</span></td><td><button class="text-button" data-client-id="${client.id}">Megnyitás</button></td></tr>`).join("")}</tbody></table></div>${filterEmptyMessage("Nincs a szűrésnek megfelelő kliens.")}</div>`;
 }
 
 export function renderClients() {
   const clients = data.users.filter((user) => user.role === "client");
-  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Kliensek</div><h1>Klienseid</h1><p>Minden terv, visszajelzés és edzés egy helyen.</p></div><button class="btn btn-teal" id="add-client">Kliens regisztrációja</button></div><section class="panel"><div class="search-row"><input id="client-search" placeholder="Keresés név vagy e-mail alapján" aria-label="Keresés név vagy e-mail alapján" /></div><div id="client-table">${renderClientTable(clients)}</div></section>`;
+  return `<div class="topbar"><div><div class="eyebrow">Munkatér / Kliensek</div><h1>Klienseid</h1><p>Minden terv, visszajelzés és edzés egy helyen.</p></div><button class="btn btn-teal" id="add-client">Kliens regisztrációja</button></div><section class="panel"><div id="client-table">${renderClientTable(clients)}</div></section>`;
 }
 
 export function renderEnhancedClientDetail(client) {
@@ -22,6 +23,6 @@ export function renderEnhancedClientDetail(client) {
 
 export function renderTrainerClients(trainer) {
   const clients = data.users.filter((user) => user.role === "client" && (user.trainerIds || []).includes(trainer.id));
-  const planBadge = `<span class="plan-badge plan-badge-${currentPlan()}">${planLabel()} csomag${currentPlan() === "free" ? ` · ${clients.length}/3 kliens` : ""}</span>`;
+  const planBadge = `<span class="plan-badge plan-badge-${currentPlan()}">${planLabel()} csomag${currentPlan() === "free" ? ` · ${clients.length}/5 kliens` : ""}</span>`;
   return `<div class="topbar"><div><div class="eyebrow">Edzői tér / Kliensek</div><h1>Klienseid ${planBadge}</h1><p>Minden hozzád rendelt kliens és edzésük.</p></div></div><section class="panel">${renderClientTable(clients)}</section>`;
 }
