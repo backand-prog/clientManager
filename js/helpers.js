@@ -112,6 +112,21 @@ export function groupWorkoutDateLabel(workout) {
   return date ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(date) : "";
 }
 
+export function groupWorkoutStanding(workout, userId = currentUser()?.id) {
+  const registered = Boolean(workout.isRegistered || workout.registrations?.includes(userId));
+  const waitlisted = !registered && Boolean(workout.isWaitlisted);
+  const full = Number(workout.participantCount || 0) >= Number(workout.capacity || 0);
+  const label = registered ? "Jelentkeztél" : waitlisted ? "Várólistán vagy" : full ? "Várólistára jelentkezhetsz" : "Jelentkezhető";
+  return { registered, waitlisted, full, label };
+}
+
+export function groupWorkoutMeta(workout) {
+  const parts = [`${workout.participantCount}/${workout.capacity} fő`, `${workout.duration} perc`];
+  if (workout.location) parts.push(workout.location);
+  if (workout.waitlistCount) parts.push(`várólista: ${workout.waitlistCount}`);
+  return parts.join(" · ");
+}
+
 export function visibleGroupWorkouts(user = currentUser()) {
   if (!user) return [];
   return (data.groupWorkouts || []).filter((workout) => {

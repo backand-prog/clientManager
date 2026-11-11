@@ -93,10 +93,11 @@ function bindModalEvents() {
       description: values.description.trim(),
       startsAt: startsAt.toISOString(),
       duration: Number(values.duration),
-      capacity: Number(values.capacity)
+      capacity: Number(values.capacity),
+      location: (values.location || "").trim()
     };
-    if (currentUser()?.role === "trainer" && currentPlan() === "free" && workout.capacity > 6) {
-      toast("A Free csomagban a csoportos edzés legfeljebb 6 fős lehet.");
+    if (currentUser()?.role === "trainer" && currentPlan() === "free" && workout.capacity > 8) {
+      toast("A Free csomagban a csoportos edzés legfeljebb 8 fős lehet.");
       return;
     }
     const submit = form.querySelector('button[type="submit"], button:not([type])');

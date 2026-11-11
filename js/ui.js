@@ -484,7 +484,9 @@ function bindEvents() {
       else if (groupAction === "cancel") await api.cancelGroupWorkout(groupId);
       else throw new Error("Ismeretlen művelet.");
       await refreshRemote();
-      toast(groupAction === "join" ? "Jelentkeztél a csoportos edzésre." : groupAction === "leave" ? "Leiratkoztál a csoportos edzésről." : "A csoportos edzés lemondva.");
+      const joined = (data.groupWorkouts || []).find((item) => String(item.id) === String(groupId));
+      const onWaitlist = groupAction === "join" && joined?.isWaitlisted;
+      toast(onWaitlist ? "A csoportos edzés betelt, felkerültél a várólistára." : groupAction === "join" ? "Jelentkeztél a csoportos edzésre." : groupAction === "leave" ? "Leiratkoztál a csoportos edzésről." : "A csoportos edzés lemondva.");
     } catch (error) {
       button.disabled = false;
       toast(`Nem sikerült végrehajtani a műveletet: ${error.message}`);

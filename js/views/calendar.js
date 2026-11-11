@@ -7,7 +7,7 @@ import {
 } from "../state.js";
 import { toDateInputValue } from "../utils.js";
 import { toast } from "../runtime.js";
-import { calendarClientsFor, dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutTime, trainerName, trainingPlanDayLabel, visibleGroupWorkouts, workoutDateToInputValue } from "../helpers.js";
+import { calendarClientsFor, dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, trainerName, trainingPlanDayLabel, visibleGroupWorkouts, workoutDateToInputValue } from "../helpers.js";
 import { openModal, renderWorkoutModalForUser } from "../modals.js";
 
 export function renderCalendar(user) {
@@ -60,22 +60,22 @@ export function renderCalendar(user) {
     const isFuture = startsAt && startsAt.getTime() > Date.now();
     const isTrainerOwner = user.role === "trainer" && workout.trainerId === user.id;
     const isClient = user.role === "client";
-    const isRegistered = Boolean(workout.isRegistered || workout.registrations?.includes(user.id));
-    const hasCapacity = Number(workout.participantCount || 0) < Number(workout.capacity || 0);
+    const standing = groupWorkoutStanding(workout, user.id);
+    const isRegistered = standing.registered;
     const action = isClient && !workout.cancelledAt && isFuture
       ? isRegistered
         ? `<button type="button" class="btn btn-ghost" data-group-action="leave" data-group-id="${escapeHtml(workout.id)}">Leiratkozás</button>`
-        : hasCapacity
-          ? `<button type="button" class="btn btn-teal" data-group-action="join" data-group-id="${escapeHtml(workout.id)}">Jelentkezés</button>`
-          : `<span class="status status-paused">Betelt</span>`
+        : standing.waitlisted
+          ? `<button type="button" class="btn btn-ghost" data-group-action="leave" data-group-id="${escapeHtml(workout.id)}">Leiratkozás a várólistáról</button>`
+          : `<button type="button" class="btn btn-teal" data-group-action="join" data-group-id="${escapeHtml(workout.id)}">${standing.full ? "Várólistára jelentkezem" : "Jelentkezés"}</button>`
       : isTrainerOwner && !workout.cancelledAt
         ? `<div class="session-row-actions"><button type="button" class="btn btn-ghost" data-group-action="edit" data-group-id="${escapeHtml(workout.id)}">Szerkesztés</button><button type="button" class="btn btn-danger" data-group-action="cancel" data-group-id="${escapeHtml(workout.id)}">Edzés lemondása</button></div>`
         : "";
-    const status = workout.cancelledAt ? "Lemondva" : !isFuture ? "Megtartva" : isRegistered ? "Jelentkeztél" : hasCapacity ? "Jelentkezhető" : "Betelt";
+    const status = workout.cancelledAt ? "Lemondva" : !isFuture ? "Megtartva" : isClient ? standing.label : standing.full ? "Betelt" : "Jelentkezhető";
     const participantList = (isTrainerOwner || user.role === "admin") && (workout.participantNames?.length || workout.registrations?.length)
       ? `<p class="group-participants">Jelentkeztek: ${(workout.participantNames?.length ? workout.participantNames : workout.registrations.map((id) => data.users.find((item) => item.id === id)?.name || "Kliens")).map(escapeHtml).join(", ")}</p>`
       : "";
-    return `<div class="session-row group-session-row"><div><strong>${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${escapeHtml(workout.trainerName || trainerName(workout.trainerId))} · ${workout.duration} perc · ${workout.participantCount}/${workout.capacity} fő</p>${workout.description ? `<p>${escapeHtml(workout.description)}</p>` : ""}${participantList}</div><span class="status status-${workout.cancelledAt ? "cancelled" : isRegistered || status === "Megtartva" ? "active" : "paused"}">${status}</span>${action}</div>`;
+    return `<div class="session-row group-session-row"><div><strong>${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${escapeHtml(workout.trainerName || trainerName(workout.trainerId))} · ${escapeHtml(groupWorkoutMeta(workout))}</p>${workout.description ? `<p>${escapeHtml(workout.description)}</p>` : ""}${participantList}</div><span class="status status-${workout.cancelledAt ? "cancelled" : isRegistered || status === "Megtartva" ? "active" : "paused"}">${status}</span>${action}</div>`;
   }).join("");
   const addButtons = user.role === "client"
     ? `<button type="button" class="btn btn-teal" id="calendar-add-workout">+ Egyéni edzés</button>`
@@ -108,5 +108,5 @@ export function renderGroupWorkoutModal(workout = null) {
   const startBase = existingStart || localStart;
   const startsAt = `${toDateInputValue(startBase)}T${String(startBase.getHours()).padStart(2, "0")}:${String(startBase.getMinutes()).padStart(2, "0")}`;
   const minStart = existingStart && existingStart.getTime() < Date.now() ? startsAt : `${toDateInputValue(new Date())}T${String(new Date().getHours()).padStart(2, "0")}:${String(new Date().getMinutes()).padStart(2, "0")}`;
-  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Naptár / Csoportos edzés</div><h2>${isEdit ? "Csoportos edzés szerkesztése" : "Új csoportos edzés"}</h2></div><button type="button" class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="group-workout-form" data-group-id="${isEdit ? escapeHtml(workout.id) : ""}"><div class="field"><label for="group-title">Edzés neve</label><input id="group-title" name="title" maxlength="120" required value="${escapeHtml(workout?.title || "")}" /></div><div class="field"><label for="group-description">Leírás</label><textarea id="group-description" name="description" maxlength="2000">${escapeHtml(workout?.description || "")}</textarea></div><div class="form-grid"><div class="field span-2"><label for="group-starts-at">Kezdés</label><input id="group-starts-at" name="startsAt" type="datetime-local" min="${minStart}" value="${startsAt}" required /></div><div class="field"><label for="group-duration">Időtartam (perc)</label><input id="group-duration" name="duration" type="number" min="1" max="480" value="${workout?.duration || 60}" required /></div><div class="field"><label for="group-capacity">Férőhelyek</label><input id="group-capacity" name="capacity" type="number" min="${isEdit ? Math.max(2, workout.participantCount || 2) : 2}" max="100" value="${workout?.capacity || 8}" required /></div></div><p class="settings-help">A csoportos edzést csak a hozzád kapcsolt kliensek látják és látogathatják.${isEdit ? " A férőhelyek száma nem lehet kevesebb a már jelentkezettek számánál." : ""}</p><div class="modal-actions"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">${isEdit ? "Módosítások mentése" : "Edzés meghirdetése"}</button></div></form></div></div>`;
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Naptár / Csoportos edzés</div><h2>${isEdit ? "Csoportos edzés szerkesztése" : "Új csoportos edzés"}</h2></div><button type="button" class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><form id="group-workout-form" data-group-id="${isEdit ? escapeHtml(workout.id) : ""}"><div class="field"><label for="group-title">Edzés neve</label><input id="group-title" name="title" maxlength="120" required value="${escapeHtml(workout?.title || "")}" /></div><div class="field"><label for="group-description">Leírás</label><textarea id="group-description" name="description" maxlength="2000">${escapeHtml(workout?.description || "")}</textarea></div><div class="form-grid"><div class="field span-2"><label for="group-starts-at">Kezdés</label><input id="group-starts-at" name="startsAt" type="datetime-local" min="${minStart}" value="${startsAt}" required /></div><div class="field"><label for="group-duration">Időtartam (perc)</label><input id="group-duration" name="duration" type="number" min="1" max="480" value="${workout?.duration || 60}" required /></div><div class="field"><label for="group-capacity">Férőhelyek</label><input id="group-capacity" name="capacity" type="number" min="${isEdit ? Math.max(2, workout.participantCount || 2) : 2}" max="100" value="${workout?.capacity || 8}" required /></div><div class="field span-2"><label for="group-location">Helyszín / terem (nem kötelező)</label><input id="group-location" name="location" maxlength="120" placeholder="Pl. A terem" value="${escapeHtml(workout?.location || "")}" /></div></div><p class="settings-help">A csoportos edzést csak a hozzád kapcsolt kliensek látják és látogathatják. Ha betelt a létszám, az újabb jelentkezők várólistára kerülnek, és lemondás esetén automatikusan előrelépnek.${isEdit ? " A férőhelyek száma nem lehet kevesebb a már jelentkezettek számánál." : ""}</p><div class="modal-actions"><button type="button" class="btn btn-ghost" id="cancel-modal">Mégse</button><button class="btn btn-dark">${isEdit ? "Módosítások mentése" : "Edzés meghirdetése"}</button></div></form></div></div>`;
 }

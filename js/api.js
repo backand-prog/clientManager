@@ -29,6 +29,9 @@ function mapGroupWorkout(workout) {
     participantCount: Number(workout.participant_count) || 0,
     participantNames: Array.isArray(workout.participant_names) ? workout.participant_names : [],
     isRegistered: Boolean(workout.is_registered),
+    isWaitlisted: Boolean(workout.is_waitlisted),
+    waitlistCount: Number(workout.waitlist_count) || 0,
+    location: workout.location || "",
     cancelledAt: workout.cancelled_at
   };
 }
@@ -257,7 +260,8 @@ export async function createGroupWorkout(workout) {
     workout_description: workout.description || "",
     workout_starts_at: workout.startsAt,
     workout_duration_minutes: workout.duration,
-    workout_capacity: workout.capacity
+    workout_capacity: workout.capacity,
+    workout_location: workout.location || null
   });
   if (result.error) throw result.error;
 }
@@ -283,7 +287,8 @@ export async function updateGroupWorkout(workoutId, workout) {
     workout_description: workout.description || "",
     workout_starts_at: workout.startsAt,
     workout_duration_minutes: workout.duration,
-    workout_capacity: workout.capacity
+    workout_capacity: workout.capacity,
+    workout_location: workout.location || null
   });
   if (result.error) throw result.error;
 }
