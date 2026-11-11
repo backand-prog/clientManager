@@ -8,6 +8,21 @@ const PAID_PLANS = [
   { id: "studio", description: "Minden Pro funkció stúdiók és nagyobb csapatok számára." }
 ];
 
+export function isStudioLeaderActive() {
+  return currentPlan() === "studio" && ["active", "trialing"].includes(data.subscription?.status);
+}
+
+export function renderStudioTeam() {
+  if (!isStudioLeaderActive()) {
+    return `<div class="topbar"><div><div class="eyebrow">Stúdió</div><h1>Csapatom</h1></div></div><section class="panel connection-center"><div class="empty-state">A csapatkezelés a Studio csomaggal érhető el.</div></section>`;
+  }
+  const team = data.studioTeam || [];
+  const rows = team.length
+    ? team.map((member) => `<div class="connection-row"><div><strong>${escapeHtml(member.name)}</strong><p>${escapeHtml(member.email)}${member.specialty ? ` · ${escapeHtml(member.specialty)}` : ""}</p></div><span class="plan-badge">${member.accepted ? "Aktív" : "Meghívva"}</span></div>`).join("")
+    : `<div class="empty-state">Még nincs al-edző a csapatodban.</div>`;
+  return `<div class="topbar"><div><div class="eyebrow">Stúdió</div><h1>Csapatom</h1><p>A stúdiódhoz tartozó al-edzők. Az ő kliensei, edzései és edzéstervei számodra is láthatók.</p></div><button class="btn btn-teal" id="invite-studio-coach">Új edző meghívása</button></div><section class="panel connection-center">${rows}</section>`;
+}
+
 export function renderSubscription() {
   const current = currentPlan();
   const subscription = data.subscription || {};

@@ -23,12 +23,12 @@ import {
 } from "./state.js";
 import { toDateInputValue } from "./utils.js";
 import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, pendingTrainerApplications, planLabel, selectedClient, trainers } from "./helpers.js";
-import { openModal, openUpgradeModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
+import { openModal, openUpgradeModal, renderStudioCoachModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
 import { deleteTrainer, grantAdminRole, loadAdminAccounts, renderAdminContent, renderAdminHome } from "./views/admin.js";
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
 import { renderClientTable, renderEnhancedClientDetail, renderTrainerClients } from "./views/clients.js";
 import { renderCoachDirectory, renderCoachProfileDetail, renderCoachProfileEditor } from "./views/coaches.js";
-import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderSettings, renderSubscription, renderTrainerContent, renderUserGuide } from "./views/general.js";
+import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderSettings, renderSubscription, renderStudioTeam, isStudioLeaderActive, renderTrainerContent, renderUserGuide } from "./views/general.js";
 import { renderTrainingPlanModal, renderTrainingPlans } from "./views/trainingPlans.js";
 import { registerRuntime } from "./runtime.js";
 
@@ -101,6 +101,7 @@ function routeForCurrentState() {
     if (currentView === "connections") return "/coach/connections";
     if (currentView === "notifications") return "/coach/notifications";
     if (currentView === "subscription") return "/coach/subscription";
+    if (currentView === "team") return "/coach/team";
     return "/coach/settings";
   }
   if (currentView === "guide") return "/client/guide";
@@ -170,6 +171,7 @@ function restoreRouteFromUrl() {
     else if (segments[0] === "coach" && segments[1] === "notifications") setCurrentView("notifications");
     else if (segments[0] === "coach" && segments[1] === "settings") setCurrentView("settings");
     else if (segments[0] === "coach" && segments[1] === "subscription") setCurrentView("subscription");
+    else if (segments[0] === "coach" && segments[1] === "team") setCurrentView("team");
     else if (segments[0] === "coach" && segments[1] === "clients" && segments[2]) {
       setCurrentView("client-detail");
       setSelectedClientId(segments[2]);
@@ -349,7 +351,7 @@ function renderDashboard(user) {
   const navigation = isAdmin
     ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "trainer-applications" ? "active" : ""}" data-view="trainer-applications">Edzői jelentkezések${pendingTrainerApplications().length ? ` (${pendingTrainerApplications().length})` : ""}</button><button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
     : isTrainer
-      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "subscription" ? "active" : ""}" data-view="subscription">Előfizetés</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
+      ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${isStudioLeaderActive() ? `<button class="nav-btn ${currentView === "team" ? "active" : ""}" data-view="team">Csapatom</button>` : ""}<button class="nav-btn ${currentView === "subscription" ? "active" : ""}" data-view="subscription">Előfizetés</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
       : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
   const workspace = currentView === "guide"
     ? renderUserGuide()
@@ -358,7 +360,7 @@ function renderDashboard(user) {
     : isAdmin
       ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
       : isTrainer
-        ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : currentView === "subscription" ? renderSubscription() : renderTrainerContent(user)
+        ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : currentView === "subscription" ? renderSubscription() : currentView === "team" ? renderStudioTeam() : renderTrainerContent(user)
         : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
   return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">Back<span>Plan</span></div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderNotificationPreview(user)}${workspace}${renderLegalLinks()}</section></main>`;
 }
@@ -668,6 +670,7 @@ function bindEvents() {
   document.querySelector("#manage-trainers")?.addEventListener("click", () => openModal(renderTrainerAssignmentModal(selectedClient())));
   document.querySelectorAll("[data-workout-index]").forEach((button) => button.addEventListener("click", () => openModal(renderWorkoutModalForUser(selectedClient(), selectedClient().workouts[Number(button.dataset.workoutIndex)], button.dataset.workoutIndex))));
   document.querySelector("#add-trainer")?.addEventListener("click", () => openModal(renderTrainerModal()));
+  document.querySelector("#invite-studio-coach")?.addEventListener("click", () => openModal(renderStudioCoachModal()));
   document.querySelectorAll(".btn-delete-trainer").forEach((button) => button.addEventListener("click", () => deleteTrainer(button.dataset.trainerId)));
   document.querySelector("#client-search")?.addEventListener("input", (event) => { const needle = event.target.value.toLowerCase(); const filtered = data.users.filter((user) => user.role === "client" && `${user.name} ${user.email}`.toLowerCase().includes(needle)); document.querySelector("#client-table").innerHTML = renderClientTable(filtered); document.querySelectorAll("[data-client-id]").forEach((button) => button.addEventListener("click", () => navigateToView("client-detail", { clientId: button.dataset.clientId }))); });
 }
