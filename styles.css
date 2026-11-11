@@ -331,7 +331,7 @@ tbody tr:last-child td { border-bottom: 0; }
 
 .filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 18px; }
 .filter-bar input[type="search"] { flex: 1 1 260px; min-width: 0; border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; }
-.filter-bar select { border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; background: var(--surface, #fff); color: inherit; max-width: 100%; }
+.filter-bar select { border: 1px solid var(--line); border-radius: 7px; padding: 10px 13px; background: var(--white); color: var(--ink); max-width: 100%; }
 .filter-count { font-size: .8rem; color: var(--muted, #6b7280); }
 [data-filter-item][hidden], .filter-empty[hidden], [data-filter-table][hidden] { display: none !important; }
 .session-plan { margin: 2px 0 0; font-size: .8rem; font-weight: 600; color: var(--muted); }

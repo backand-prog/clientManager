@@ -24,12 +24,12 @@ import {
 import { toDateInputValue } from "./utils.js";
 import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, planLabel, selectedClient, trainers } from "./helpers.js";
 import { bindFilters } from "./filters.js";
-import { openModal, openUpgradeModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
+import { openModal, openUpgradeModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutDetailModal, renderWorkoutModalForUser } from "./modals.js";
 import { deleteTrainer, grantAdminRole, loadAdminAccounts, loadAdminSubscriptions, loadTrainerEmails, renderAdminContent, renderAdminHome } from "./views/admin.js";
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
 import { renderClientTable, renderEnhancedClientDetail, renderTrainerClients } from "./views/clients.js";
 import { renderCoachDirectory, renderCoachProfileDetail, renderCoachProfileEditor } from "./views/coaches.js";
-import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderSettings, renderSubscription, renderTrainerContent, renderUserGuide } from "./views/general.js";
+import { renderClientContent, renderConnectionCenter, renderNotificationPreview, renderNotifications, renderMyWorkouts, renderSettings, renderSubscription, renderTrainerContent, renderUserGuide } from "./views/general.js";
 import { renderTrainingPlanModal, renderTrainingPlans } from "./views/trainingPlans.js";
 import { registerRuntime } from "./runtime.js";
 
@@ -107,6 +107,7 @@ function routeForCurrentState() {
   if (currentView === "training-plans") return "/client/training-plans";
   if (currentView === "home" || currentView === "profile") return "/client";
   if (currentView === "calendar") return "/client/calendar";
+  if (currentView === "my-workouts") return "/client/workouts";
   if (currentView === "connections") return "/client/connections";
   if (currentView === "notifications") return "/client/notifications";
   if (currentView === "settings") return "/client/settings";
@@ -176,6 +177,7 @@ function restoreRouteFromUrl() {
   } else if (segments[0] === "client" && segments[1] === "guide") setCurrentView("guide");
   else if (segments[0] === "client" && segments[1] === "training-plans") setCurrentView("training-plans");
   else if (segments[0] === "client" && segments[1] === "calendar") setCurrentView("calendar");
+  else if (segments[0] === "client" && segments[1] === "workouts") setCurrentView("my-workouts");
   else if (segments[0] === "client" && segments[1] === "connections") setCurrentView("connections");
   else if (segments[0] === "client" && segments[1] === "notifications") setCurrentView("notifications");
   else if (segments[0] === "client" && segments[1] === "settings") setCurrentView("settings");
@@ -341,7 +343,7 @@ function renderDashboard(user) {
     ? `<div class="nav-label">Munkatér</div><button class="nav-btn ${currentView === "overview" ? "active" : ""}" data-view="overview">Áttekintés</button><button class="nav-btn ${currentView === "home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "trainers" ? "active" : ""}" data-view="trainers">Edzők</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-profiles", "coach-profile-review"].includes(currentView) ? "active" : ""}" data-view="coach-profiles">Edzői profilok</button><button class="nav-btn ${currentView === "administrators" ? "active" : ""}" data-view="administrators">Adminisztrátorok</button><button class="nav-btn ${currentView === "subscriptions" ? "active" : ""}" data-view="subscriptions">Előfizetések</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${guideBtn}`
     : isTrainer
       ? `<div class="nav-label">Edzői tér</div><button class="nav-btn ${currentView === "home" || currentView === "trainer-home" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "clients" || currentView === "client-detail" ? "active" : ""}" data-view="clients">Kliensek</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${currentView === "coach-profile" ? "active" : ""}" data-view="coach-profile">Bemutatkozásom</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button><button class="nav-btn ${currentView === "subscription" ? "active" : ""}" data-view="subscription">Előfizetés</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`
-      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
+      : `<div class="nav-label">Saját tér</div><button class="nav-btn ${currentView === "home" || currentView === "profile" ? "active" : ""}" data-view="home">Kezdőlap</button><button class="nav-btn ${currentView === "calendar" ? "active" : ""}" data-view="calendar">Naptár</button><button class="nav-btn ${currentView === "my-workouts" ? "active" : ""}" data-view="my-workouts">Edzéseim</button>${plansBtn}<button class="nav-btn ${["coach-directory", "coach-profile-detail"].includes(currentView) ? "active" : ""}" data-view="coach-directory">Edzők böngészése</button><button class="nav-btn ${currentView === "connections" ? "active" : ""}" data-view="connections">Kapcsolatok</button>${notificationsBtn}<div class="nav-label">Rendszer</div>${settingsBtn}${guideBtn}`;
   const workspace = currentView === "guide"
     ? renderUserGuide()
     : currentView === "training-plans"
@@ -350,7 +352,7 @@ function renderDashboard(user) {
       ? currentView === "home" ? renderAdminHome(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "notifications" ? renderNotifications(user) : renderAdminContent()
       : isTrainer
         ? currentView === "home" || currentView === "trainer-home" ? renderTrainerContent(user) : currentView === "clients" ? renderTrainerClients(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-profile" ? renderCoachProfileEditor(user) : currentView === "client-detail" ? renderEnhancedClientDetail(selectedClient()) : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : currentView === "subscription" ? renderSubscription() : renderTrainerContent(user)
-        : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
+        : currentView === "home" || currentView === "profile" ? renderClientContent(user) : currentView === "calendar" ? renderCalendar(user) : currentView === "my-workouts" ? renderMyWorkouts(user) : currentView === "coach-directory" ? renderCoachDirectory() : currentView === "coach-profile-detail" ? renderCoachProfileDetail() : currentView === "connections" ? renderConnectionCenter(user) : currentView === "notifications" ? renderNotifications(user) : currentView === "settings" ? renderSettings(user) : renderClientContent(user);
   return `<main class="app-shell dashboard"><aside class="sidebar"><div class="brand">Back<span>Plan</span></div>${navigation}<div class="sidebar-spacer"></div><div class="user-mini"><div class="avatar">${initials(user.name)}</div><div>${escapeHtml(user.name)}<small>${isAdmin ? "Adminisztrátor" : isTrainer ? "Edző" : "Kliens"}</small></div></div><button class="nav-btn" id="logout" style="margin-top:14px">Kijelentkezés</button></aside><section class="main">${renderNotificationPreview(user)}${workspace}${renderLegalLinks()}</section></main>`;
 }
 
@@ -548,6 +550,17 @@ function bindEvents() {
     const workout = client?.workouts?.[index];
     if (!client || !workout) return toast("Ez az edzés már nem érhető el.");
     openModal(renderWorkoutModalForUser(client, workout, index));
+  }));
+  document.querySelectorAll("[data-my-workout]").forEach((button) => button.addEventListener("click", () => {
+    const user = currentUser();
+    const index = Number(button.dataset.myWorkout);
+    const workout = user.workouts?.[index];
+    if (!workout) return toast("Ez az edzés már nem érhető el.");
+    openModal(renderWorkoutDetailModal(workout, index));
+    document.querySelector("#workout-detail-edit")?.addEventListener("click", () => {
+      document.querySelector("#modal-backdrop").remove();
+      openModal(renderWorkoutModalForUser(user, workout, index));
+    });
   }));
   document.querySelectorAll("[data-coach-profile]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-detail", { coachId: button.dataset.coachProfile })));
   document.querySelectorAll("[data-coach-review]").forEach((button) => button.addEventListener("click", () => navigateToView("coach-profile-review", { coachId: button.dataset.coachReview })));

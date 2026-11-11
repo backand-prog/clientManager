@@ -4,7 +4,7 @@ import {
   data
 } from "./state.js";
 import { render, toast, refreshRemote } from "./runtime.js";
-import { assignedTrainerOptions, calendarClientsFor, currentPlan, escapeHtml, selectedClient, trainerName, trainers, visibleTrainingPlanDaysForClient, workoutDateToInputValue, workoutTypeCatalogOptions } from "./helpers.js";
+import { assignedTrainerOptions, calendarClientsFor, currentPlan, escapeHtml, selectedClient, trainerName, trainers, trainingPlanDayLabel, visibleTrainingPlanDaysForClient, workoutTrainerLabel, workoutDateToInputValue, workoutTypeCatalogOptions } from "./helpers.js";
 import { renderTrainingPlanDay, renderTrainingPlanExercise } from "./views/trainingPlans.js";
 
 export function openModal(client = {}) { document.body.insertAdjacentHTML("beforeend", typeof client === "string" ? client : renderModal("client", client)); bindModalEvents(); }
@@ -182,6 +182,13 @@ export function renderWorkoutModalForUser(client, workout = {}, index = "") {
   }
   const options = `<option value="" disabled ${trainerId ? "" : "selected"}>Válassz edzőt</option>${choices.map((trainer) => `<option value="${escapeHtml(trainer.id)}" ${trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}`;
   return renderWorkoutModal(client, workout, index).replace(`<div class="field span-2"><label for="workout-notes">`, `<div class="field span-2"><label for="workout-trainer">Edző</label><select id="workout-trainer" name="trainerId" required>${options}</select><small class="settings-help">Csak a klienshez rendelt edzők közül választhatsz.</small></div><div class="field span-2"><label for="workout-notes">`);
+}
+
+export function renderWorkoutDetailModal(workout, index) {
+  const own = !workout.trainerId;
+  const planText = trainingPlanDayLabel(workout.trainingPlanDayId);
+  const row = (label, value) => `<div class="meta-row"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+  return `<div class="modal-backdrop" id="modal-backdrop"><div class="modal"><div class="modal-head"><div><div class="eyebrow">Edzés</div><h2>${escapeHtml(workout.type)}</h2></div><button class="close" id="close-modal" aria-label="Bezárás">&times;</button></div><div class="profile-meta">${row("Időpont", `${workout.date} · ${workout.time}`)}${row("Időtartam", `${workout.duration} perc`)}${row("Edző", workoutTrainerLabel(workout))}${row("Állapot", workout.status)}${planText ? row("Edzésterv", planText) : ""}${workout.notes ? row("Jegyzet", workout.notes) : ""}</div><div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px"><button type="button" class="btn btn-ghost" id="cancel-modal">Bezárás</button>${own ? `<button type="button" class="btn btn-dark" id="workout-detail-edit" data-workout-index="${index}">Szerkesztés</button>` : ""}</div></div></div>`;
 }
 
 export function renderTrainerAssignmentModal(client) {

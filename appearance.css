@@ -160,3 +160,13 @@ html[data-motion="reduce"] .btn:hover { transform: none; }
 @media (prefers-reduced-motion: reduce) {
   html[data-motion="normal"] *, html[data-motion="normal"] *::before, html[data-motion="normal"] *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
+
+/* Sötét nézet: minden szabad űrlapelem (szűrők, keresők) a téma színeit kapja. */
+html[data-theme="dark"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="file"]),
+html[data-theme="dark"] select,
+html[data-theme="dark"] textarea { background-color: #0e1d27; color: var(--ink); border-color: var(--line); }
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color: #7f95a1; }
+html[data-theme="dark"] select option { background: #0e1d27; color: var(--ink); }
+html[data-theme="dark"] .filter-bar input:focus,
+html[data-theme="dark"] .filter-bar select:focus { outline: 2px solid var(--teal); outline-offset: 1px; }

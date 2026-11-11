@@ -1,7 +1,8 @@
 import {
   data
 } from "../state.js";
-import { currentPlan, escapeHtml, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, initials, nextSessionLabel, planLabel, trainerName, upcomingGroupWorkouts, trainingPlanDayLabel, upcomingWorkouts, workoutStats, workoutTrainerLabel } from "../helpers.js";
+import { filterAttrs, filterEmptyMessage, renderFilterBar, uniqueOptions } from "../filters.js";
+import { coachProfileFor, currentPlan, escapeHtml, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, initials, nextSessionLabel, planLabel, trainerName, upcomingGroupWorkouts, trainingPlanDayLabel, upcomingWorkouts, workoutStats, workoutTrainerLabel } from "../helpers.js";
 
 const PAID_PLANS = [
   { id: "pro", description: "Korlátlan kliens, edzésterv és nagyobb csoportos edzések." },
@@ -37,11 +38,18 @@ export function renderConnectionCenter(user) {
   const sent = requests.filter((request) => request.requesterId === user.id).slice(0, 5);
   const canRequest = user.role === "client" || user.role === "trainer";
   const requestLabel = user.role === "client" ? "Edző megkeresése e-mail-cím alapján" : "Kliens hozzáadása e-mail-cím alapján";
+  const connected = user.role === "client"
+    ? (user.trainerIds || []).map((id) => ({ id, name: trainerName(id), detail: data.users.find((item) => item.id === id)?.specialty || coachProfileFor(id)?.specialty || "Edző", profile: Boolean(coachProfileFor(id)) }))
+    : user.role === "trainer"
+      ? data.users.filter((item) => item.role === "client" && (item.trainerIds || []).includes(user.id)).map((item) => ({ id: item.id, name: item.name, detail: item.goal || "Kliens", client: true }))
+      : [];
+  const connectedList = user.role === "admin" ? "" : `<h3>Meglévő kapcsolatok (${connected.length})</h3>${connected.length ? connected.map((item) => `<div class="connection-row"><div><strong>${escapeHtml(item.name)}</strong><p>${escapeHtml(item.detail)}</p></div>${item.client ? `<button class="btn btn-ghost" data-client-id="${escapeHtml(item.id)}">Megnyitás</button>` : item.profile ? `<button class="btn btn-ghost" data-coach-profile="${escapeHtml(item.id)}">Profil megnyitása</button>` : ""}</div>`).join("") : `<div class="empty-state">Még nincs kapcsolatod.</div>`}`;
   return `<div class="topbar"><div><div class="eyebrow">Munkatér / Kapcsolatok</div><h1>Kapcsolatok</h1><p>A kapcsolat csak a címzett jóváhagyása után jön létre.</p></div></div><section class="panel connection-center">
     ${canRequest ? `<form id="connection-request-form" class="search-row"><input id="connection-email" type="email" placeholder="Regisztrált ${user.role === "client" ? "edző" : "kliens"} e-mail-címe" required /><button class="btn btn-teal" type="submit">${requestLabel}</button></form>` : ""}
+    ${connectedList}
     ${pending.length ? `<h3>Jóváhagyásra vár</h3>${pending.map((request) => `<div class="connection-row"><div><strong>${escapeHtml(request.requesterName)}</strong><p>${user.role === "trainer" ? "Ez a kliens szeretne hozzád kapcsolódni." : "Ez az edző szeretne kliensként hozzáadni."}</p></div><button class="btn btn-teal" data-connection-decision="approved" data-request-id="${escapeHtml(request.id)}">Jóváhagyás</button><button class="btn btn-ghost" data-connection-decision="declined" data-request-id="${escapeHtml(request.id)}">Elutasítás</button></div>`).join("")}` : ""}
     ${sent.length ? `<h3>Elküldött kérések</h3>${sent.map((request) => `<div class="connection-row"><div><strong>${escapeHtml(request.recipientName)}</strong><p>${request.status === "pending" ? "Válaszra vár" : request.status === "approved" ? "Jóváhagyva" : "Elutasítva"} · ${escapeHtml(request.createdAt ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(new Date(request.createdAt)) : "")}</p></div></div>`).join("")}` : ""}
-    ${!pending.length && !sent.length ? `<div class="empty-state">Még nincsenek kapcsolati kéréseid.</div>` : ""}
+    ${!pending.length && !sent.length ? `<p class="settings-help">Nincs függőben lévő vagy elküldött kapcsolati kérésed.</p>` : ""}
   </section>`;
 }
 
@@ -88,4 +96,15 @@ export function renderClientContent(user) {
     const status = standing.label;
     return `<div class="session-row"><div><strong>${escapeHtml(groupWorkoutDateLabel(workout))} · ${escapeHtml(groupWorkoutTime(workout))} · ${escapeHtml(workout.title)}</strong><p>${escapeHtml(workout.trainerName || trainerName(workout.trainerId))} · ${escapeHtml(groupWorkoutMeta(workout))}</p>${workout.description ? `<p>${escapeHtml(workout.description)}</p>` : ""}</div><span class="status ${registered ? "status-active" : "status-paused"}">${status}</span>${action}</div>`;
   }).join("") : `<div class="empty-state">Jelenleg nincs közelgő csoportos edzés a kapcsolt edzőidtől.</div>`}</section>`;
+}
+
+export function renderMyWorkouts(user) {
+  const workouts = (user.workouts || []).map((workout, index) => ({ workout, index }))
+    .sort((a, b) => `${b.workout.date} ${b.workout.time}`.localeCompare(`${a.workout.date} ${a.workout.time}`));
+  const rows = workouts.map(({ workout, index }) => {
+    const planLabelText = trainingPlanDayLabel(workout.trainingPlanDayId);
+    const statusClass = workout.status === "Teljesítve" ? "active" : workout.status === "Lemondva" ? "cancelled" : "paused";
+    return `<div class="session-row"${filterAttrs(`${workout.type} ${workout.date} ${workoutTrainerLabel(workout)} ${planLabelText} ${workout.notes}`, { status: workout.status })}><div><strong>${escapeHtml(workout.type)}</strong><p>${escapeHtml(workout.date)} · ${escapeHtml(workout.time)} · ${workout.duration} perc · ${escapeHtml(workoutTrainerLabel(workout))}</p>${planLabelText ? `<p class="session-plan">Edzésterv: ${escapeHtml(planLabelText)}</p>` : ""}</div><span class="status status-${statusClass}">${escapeHtml(workout.status)}</span><button type="button" class="btn btn-ghost" data-my-workout="${index}">Megnyitás</button></div>`;
+  }).join("");
+  return `<div class="topbar"><div><div class="eyebrow">Saját tér / Edzések</div><h1>Edzéseim</h1><p>Az összes edzésed időrendben, a legújabbal kezdve.</p></div><div class="topbar-actions"><button class="btn btn-teal" id="add-workout">+ Egyéni edzés</button></div></div><section class="panel">${workouts.length ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés edzéstípus, dátum, edző vagy jegyzet alapján", selects: [{ key: "status", label: "Állapot", alwaysShow: true, options: [["Beütemezve", "Beütemezve"], ["Teljesítve", "Teljesítve"], ["Lemondva", "Lemondva"]] }] })}${rows}${filterEmptyMessage("Nincs a szűrésnek megfelelő edzés.")}</div>` : `<div class="empty-state">Még nincs rögzített edzésed.</div>`}</section>`;
 }
