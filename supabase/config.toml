@@ -1,0 +1,28 @@
+project_id = "yrzeuixuigsnopglbcuc"
+
+# Csak az itt deklarált Auth-beállításokat tölti fel a `supabase config push`.
+# Az SMTP-beállítás (Resend) a Dashboardon van; a jelszó nem kerül a repóba.
+
+[auth.email.template.confirmation]
+subject = "Erősítsd meg az e-mail címed – BackPlan"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.invite]
+subject = "Meghívást kaptál a BackPlanbe"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.recovery]
+subject = "Jelszó visszaállítása – BackPlan"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "Belépés a BackPlanbe"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.email_change]
+subject = "E-mail cím módosításának megerősítése – BackPlan"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.reauthentication]
+subject = "Megerősítő kód – BackPlan"
+content_path = "./supabase/templates/reauthentication.html"
