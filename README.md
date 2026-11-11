@@ -128,6 +128,14 @@ Az éles és a teszt környezet teljesen különálljon, hogy tesztadat ne kerü
 
 A `.env.test` fájlt ne commitold (a `.env*` mintát a `.gitignore` tartalmazza).
 
+### Automata adatbázis-tesztek
+
+```
+node tests/db-tests.mjs
+```
+
+A teszt projekten (a `.env.test` `SUPABASE_ACCESS_TOKEN` értékével, vagy környezeti változóval; a projekt azonosítója felülírható a `TEST_PROJECT_REF` változóval) futtatja a csomaglimitek, a várólista, a jogosultság-emelés elleni védelem, az edzés-hozzárendelés és a stúdió RLS ellenőrzéseit. Minden forgatókönyv visszagördülő tranzakció, ezért nem marad tesztadat. Az éles projekten a script nem fut. Séma módosítása után előbb töltsd fel a teszt projektre, majd futtasd le a teszteket.
+
 ## Helyi futtatás
 
 Indíts egyszerű helyi HTTP-szervert a projekt mappájában (például `py -m http.server 8000`), majd nyisd meg a `http://localhost:8000` címet. Nincs szükség build lépésre. Az alkalmazás Supabase-konfiguráció nélkül nem működik, ezért a `supabase-config.js` beállítása kötelező.
