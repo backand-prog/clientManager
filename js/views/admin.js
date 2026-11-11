@@ -9,7 +9,8 @@ import {
   setSession
 } from "../state.js";
 import { render, toast } from "../runtime.js";
-import { dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutDateLabel, groupWorkoutTime, initials, pendingTrainerApplications, planLabel, selectedClient, trainerName, trainers, upcomingWorkouts, workoutDateToInputValue } from "../helpers.js";
+import { toDateInputValue } from "../utils.js";
+import { dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutTime, initials, pendingTrainerApplications, planLabel, selectedClient, trainerName, trainers, upcomingGroupWorkouts, upcomingWorkouts, workoutDateToInputValue, workoutTrainerLabel } from "../helpers.js";
 import { renderClients, renderEnhancedClientDetail } from "./clients.js";
 import { renderCoachProfileDetail } from "./coaches.js";
 
@@ -79,9 +80,14 @@ function adminPeriodData(period) {
 
 export function renderAdminHome(admin) {
   const clients = data.users.filter((user) => user.role === "client");
-  const upcoming = upcomingWorkouts(clients).slice(0, 5);
+  const upcomingGroup = upcomingGroupWorkouts(admin).map((workout) => ({ kind: "group", workout, sortKey: `${toDateInputValue(groupWorkoutDate(workout))} ${groupWorkoutTime(workout)}` }));
+  const upcomingIndividual = upcomingWorkouts(clients).map((item) => ({ kind: "individual", ...item, sortKey: `${item.date} ${item.workout.time || "00:00"}` }));
+  const upcoming = [...upcomingIndividual, ...upcomingGroup].sort((a, b) => a.sortKey.localeCompare(b.sortKey)).slice(0, 5);
+  const upcomingRow = (item) => item.kind === "group"
+    ? `<div class="session-row group-session-row"><div><strong>${escapeHtml(groupWorkoutDateLabel(item.workout))} · ${escapeHtml(groupWorkoutTime(item.workout))} · ${escapeHtml(item.workout.title)}</strong><p>Csoportos edzés · ${escapeHtml(item.workout.trainerName || trainerName(item.workout.trainerId))} · ${escapeHtml(groupWorkoutMeta(item.workout))}</p></div><button class="text-button" data-view="calendar">Naptár</button></div>`
+    : `<div class="session-row"><div><strong>${escapeHtml(item.workout.date)} · ${escapeHtml(item.workout.time)} · ${escapeHtml(item.workout.type)}</strong><p>${escapeHtml(item.client.name)} · ${escapeHtml(workoutTrainerLabel(item.workout))}</p></div><button class="text-button" data-client-id="${escapeHtml(item.client.id)}">Kliens megnyitása</button></div>`;
   const date = new Intl.DateTimeFormat("hu-HU", { dateStyle: "full" }).format(new Date());
-  return `<div class="topbar"><div><div class="eyebrow">${escapeHtml(date)}</div><h1>Üdv, ${escapeHtml(admin.name.split(" ")[0])}.</h1><p>BackPlan munkaterületed rövid áttekintése.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="overview">Áttekintés</button><button class="btn btn-teal" data-view="calendar">Naptár</button></div></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Összes kliens</div><div class="trend">Nyilvántartott kliensfiók</div></div><div class="stat"><div class="number">${trainers().length}</div><div class="label">Edző</div><div class="trend">Nyilvántartott edzőfiók</div></div><div class="stat"><div class="number">${upcoming.length}</div><div class="label">Közelgő edzés</div><div class="trend">A következő alkalmak</div></div></div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Közelgő edzések</h2><button class="text-button" data-view="calendar">Naptár megnyitása</button></div>${upcoming.length ? upcoming.map((item) => `<div class="session-row"><div><strong>${escapeHtml(item.workout.date)} · ${escapeHtml(item.workout.time)} · ${escapeHtml(item.workout.type)}</strong><p>${escapeHtml(item.client.name)} · ${escapeHtml(trainerName(item.workout.trainerId))}</p></div><button class="text-button" data-client-id="${escapeHtml(item.client.id)}">Kliens megnyitása</button></div>`).join("") : `<div class="empty-state">Nincs közelgő edzés beütemezve.</div>`}</section><section class="panel"><div class="panel-head"><h2>Legutóbbi aktivitás</h2></div>${data.activities.slice(0, 4).map((item) => `<div class="activity"><div class="activity-mark">${escapeHtml(item.mark)}</div><p>${escapeHtml(item.text)}<small>${escapeHtml(item.time)}</small></p></div>`).join("") || `<div class="empty-state">Még nincs aktivitás.</div>`}</section></div>`;
+  return `<div class="topbar"><div><div class="eyebrow">${escapeHtml(date)}</div><h1>Üdv, ${escapeHtml(admin.name.split(" ")[0])}.</h1><p>BackPlan munkaterületed rövid áttekintése.</p></div><div class="topbar-actions"><button class="btn btn-ghost" data-view="overview">Áttekintés</button><button class="btn btn-teal" data-view="calendar">Naptár</button></div></div><div class="stat-grid"><div class="stat"><div class="number">${clients.length}</div><div class="label">Összes kliens</div><div class="trend">Nyilvántartott kliensfiók</div></div><div class="stat"><div class="number">${trainers().length}</div><div class="label">Edző</div><div class="trend">Nyilvántartott edzőfiók</div></div><div class="stat"><div class="number">${upcoming.length}</div><div class="label">Közelgő edzés</div><div class="trend">A következő alkalmak</div></div></div><div class="content-grid"><section class="panel"><div class="panel-head"><h2>Közelgő edzések</h2><button class="text-button" data-view="calendar">Naptár megnyitása</button></div>${upcoming.length ? upcoming.map(upcomingRow).join("") : `<div class="empty-state">Nincs közelgő edzés beütemezve.</div>`}</section><section class="panel"><div class="panel-head"><h2>Legutóbbi aktivitás</h2></div>${data.activities.slice(0, 4).map((item) => `<div class="activity"><div class="activity-mark">${escapeHtml(item.mark)}</div><p>${escapeHtml(item.text)}<small>${escapeHtml(item.time)}</small></p></div>`).join("") || `<div class="empty-state">Még nincs aktivitás.</div>`}</section></div>`;
 }
 
 export function renderAdminContent() {
@@ -114,7 +120,7 @@ function renderAdminOverview() {
     date: dateFromInputValue(record.date) ? new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(dateFromInputValue(record.date)) : record.date,
     time: record.time,
     status: record.status,
-    meta: `${record.client.name} · ${trainerName(record.trainerId)}`,
+    meta: `${record.client.name} · ${workoutTrainerLabel(record.workout)}`,
     sortDate: new Date(record.startsAt).getTime(),
     mark: initials(record.client.name)
   }));

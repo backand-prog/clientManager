@@ -4,7 +4,7 @@ import {
   data
 } from "./state.js";
 import { render, toast, refreshRemote } from "./runtime.js";
-import { calendarClientsFor, currentPlan, escapeHtml, selectedClient, trainers, visibleTrainingPlanDaysForClient, workoutDateToInputValue, workoutTypeCatalogOptions } from "./helpers.js";
+import { assignedTrainerOptions, calendarClientsFor, currentPlan, escapeHtml, selectedClient, trainerName, trainers, visibleTrainingPlanDaysForClient, workoutDateToInputValue, workoutTypeCatalogOptions } from "./helpers.js";
 import { renderTrainingPlanDay, renderTrainingPlanExercise } from "./views/trainingPlans.js";
 
 export function openModal(client = {}) { document.body.insertAdjacentHTML("beforeend", typeof client === "string" ? client : renderModal("client", client)); bindModalEvents(); }
@@ -128,6 +128,9 @@ function bindModalEvents() {
     event.preventDefault(); const values = Object.fromEntries(new FormData(event.currentTarget).entries()); values.duration = Number(values.duration) || 0; const client = data.users.find((user) => user.id === event.currentTarget.dataset.clientId) || (currentUser().role === "client" ? currentUser() : selectedClient()); if (!client) return toast("Nem található a kliens ehhez az edzéshez."); client.workouts ||= []; const index = event.currentTarget.dataset.index;
     if (values.trainerId === "solo") values.trainerId = "";
     const workoutId = index === "" ? "" : client.workouts[Number(index)]?.id || "";
+    // Kliens nem választhat edzőt: új edzése egyéni, meglévő edzésénél az edző változatlan marad.
+    if (currentUser().role === "client") values.trainerId = index === "" ? "" : client.workouts[Number(index)]?.trainerId || "";
+    else if (!values.trainerId) return toast("Válassz edzőt az edzéshez (csak a klienshez rendelt edző adható meg).");
     if (workoutId) values.id = workoutId;
     if (index === "") client.workouts.push(values); else client.workouts[Number(index)] = values;
     values.trainingPlanDayId ||= "";
@@ -186,14 +189,16 @@ function renderWorkoutModal(client, workout = {}, index = "") {
 
 export function renderWorkoutModalForUser(client, workout = {}, index = "") {
   const user = currentUser();
+  // Kliens csak edző nélküli, egyéni edzést vehet fel: számára nincs edzőválasztó.
+  if (user.role === "client") return renderWorkoutModal(client, workout, index);
   const trainerId = workout.trainerId || (user.role === "trainer" && index === "" ? user.id : "");
-  const availableTrainers = user.role === "admin"
-    ? trainers()
-    : user.role === "trainer"
-      ? trainers().filter((trainer) => trainer.id === user.id || trainer.id === trainerId)
-      : [];
-  const options = `<option value="solo" ${trainerId ? "" : "selected"}>Egyéni edzés</option>${availableTrainers.map((trainer) => `<option value="${trainer.id}" ${trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}`;
-  return renderWorkoutModal(client, workout, index).replace(`<div class="field span-2"><label for="workout-notes">`, `<div class="field span-2"><label for="workout-trainer">Edző</label><select id="workout-trainer" name="trainerId">${options}</select></div><div class="field span-2"><label for="workout-notes">`);
+  const choices = assignedTrainerOptions(client.id);
+  if (trainerId && !choices.some((trainer) => trainer.id === trainerId)) choices.push({ id: trainerId, name: trainerName(trainerId) });
+  if (!choices.length) {
+    return renderWorkoutModal(client, workout, index).replace(`<div class="field span-2"><label for="workout-notes">`, `<div class="field span-2"><label for="workout-trainer">Edző</label><select id="workout-trainer" name="trainerId" required disabled><option>Nincs a klienshez rendelt edző</option></select></div><div class="field span-2"><label for="workout-notes">`);
+  }
+  const options = `<option value="" disabled ${trainerId ? "" : "selected"}>Válassz edzőt</option>${choices.map((trainer) => `<option value="${escapeHtml(trainer.id)}" ${trainerId === trainer.id ? "selected" : ""}>${escapeHtml(trainer.name)}</option>`).join("")}`;
+  return renderWorkoutModal(client, workout, index).replace(`<div class="field span-2"><label for="workout-notes">`, `<div class="field span-2"><label for="workout-trainer">Edző</label><select id="workout-trainer" name="trainerId" required>${options}</select><small class="settings-help">Csak a klienshez rendelt edzők közül választhatsz.</small></div><div class="field span-2"><label for="workout-notes">`);
 }
 
 export function renderTrainerAssignmentModal(client) {

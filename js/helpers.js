@@ -33,7 +33,25 @@ export function initials(name) { return name.split(" ").map((part) => part[0]).j
 
 export function trainers() { return data.users.filter((user) => user.role === "trainer"); }
 
-export function trainerName(id) { return trainers().find((trainer) => trainer.id === id)?.name || "Egyéni edzés"; }
+export function trainerName(id) {
+  if (!id) return "Egyéni edzés";
+  return trainers().find((trainer) => trainer.id === id)?.name
+    || (data.trainerDirectory || []).find((row) => row.trainerId === id)?.name
+    || "Edző";
+}
+
+export function workoutTrainerLabel(workout) {
+  return workout.trainerId ? `Edző: ${trainerName(workout.trainerId)}` : "Egyéni edzés (edző nélkül)";
+}
+
+// A klienshez rendelt edzők, akik közül az edzés edzője kiválasztható.
+export function assignedTrainerOptions(clientId) {
+  const seen = new Map();
+  (data.trainerDirectory || []).filter((row) => row.clientId === clientId).forEach((row) => seen.set(row.trainerId, row.name));
+  const client = data.users.find((user) => user.id === clientId);
+  (client?.trainerIds || []).forEach((id) => { if (!seen.has(id)) seen.set(id, trainerName(id)); });
+  return [...seen].map(([id, name]) => ({ id, name }));
+}
 
 export function selectedClient() { return data.users.find((user) => user.id === selectedClientId); }
 
@@ -74,7 +92,17 @@ export function workoutStats(user) {
     due: dueWorkouts.length,
     adherence: dueWorkouts.length ? Math.round((completed / dueWorkouts.length) * 100) : 0,
     upcoming: (user.workouts || []).filter((workout) => workout.status === "Beütemezve" && workoutDateToInputValue(workout.date) >= today).length
+      + registeredUpcomingGroupWorkouts(user).length
   };
+}
+
+// A kliens által jelentkezett (nem várólistás), még le nem zajlott csoportos edzések.
+export function registeredUpcomingGroupWorkouts(user) {
+  const now = Date.now();
+  return (data.groupWorkouts || []).filter((workout) => {
+    const date = groupWorkoutDate(workout);
+    return date && date.getTime() > now && !workout.cancelledAt && groupWorkoutStanding(workout, user.id).registered;
+  });
 }
 
 export function upcomingWorkouts(clients) {
@@ -92,6 +120,12 @@ export function nextSessionLabel(user) {
     .map((workout) => ({ workout, date: workoutDateToInputValue(workout.date) }))
     .filter(({ workout, date }) => workout.status === "Beütemezve" && dateFromInputValue(date) && (date > today || (date === today && (workout.time || "00:00") >= currentTime)))
     .sort((a, b) => a.date.localeCompare(b.date) || (a.workout.time || "").localeCompare(b.workout.time || ""))[0];
+  const nextGroup = registeredUpcomingGroupWorkouts(user).sort((a, b) => new Date(a.startsAt) - new Date(b.startsAt))[0];
+  const groupDate = nextGroup ? toDateInputValue(groupWorkoutDate(nextGroup)) : "";
+  const groupBeforeIndividual = nextGroup && (!next || `${groupDate} ${groupWorkoutTime(nextGroup)}` < `${next.date} ${next.workout.time || "00:00"}`);
+  if (groupBeforeIndividual) {
+    return `${new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(groupWorkoutDate(nextGroup))} · ${groupWorkoutTime(nextGroup)} · csoportos`;
+  }
   if (!next) return "Nincs beütemezve";
   const date = new Intl.DateTimeFormat("hu-HU", { dateStyle: "medium" }).format(dateFromInputValue(next.date));
   return `${date} · ${next.workout.time || "Időpont nincs megadva"}`;

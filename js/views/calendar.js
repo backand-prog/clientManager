@@ -7,7 +7,7 @@ import {
 } from "../state.js";
 import { toDateInputValue } from "../utils.js";
 import { toast } from "../runtime.js";
-import { calendarClientsFor, dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, trainerName, trainingPlanDayLabel, visibleGroupWorkouts, workoutDateToInputValue } from "../helpers.js";
+import { calendarClientsFor, dateFromInputValue, escapeHtml, groupWorkoutDate, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, trainerName, trainingPlanDayLabel, visibleGroupWorkouts, workoutDateToInputValue, workoutTrainerLabel } from "../helpers.js";
 import { openModal, renderWorkoutModalForUser } from "../modals.js";
 
 export function renderCalendar(user) {
@@ -45,7 +45,7 @@ export function renderCalendar(user) {
     return `<article class="calendar-day ${outsideMonth ? "calendar-day-outside" : ""} ${dateValue === selectedDate ? "calendar-day-selected" : ""}"><button type="button" class="calendar-date" data-calendar-date="${dateValue}" aria-pressed="${dateValue === selectedDate}">${date.getDate()}</button><div class="calendar-events">${dayEvents.slice(0, 2).map((event) => event.kind === "group"
       ? `<button type="button" class="calendar-event calendar-group-event" data-calendar-date="${dateValue}" title="Csoportos edzés · ${escapeHtml(event.workout.title)}">${escapeHtml(groupWorkoutTime(event.workout))} ${escapeHtml(event.workout.title)} · csoportos</button>`
       : user.role === "client"
-        ? `<span class="calendar-event" title="${escapeHtml(event.workout.type)} · ${escapeHtml(trainerName(event.workout.trainerId))}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</span>`
+        ? `<span class="calendar-event" title="${escapeHtml(event.workout.type)} · ${escapeHtml(workoutTrainerLabel(event.workout))}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)}</span>`
         : `<button type="button" class="calendar-event" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}" title="${escapeHtml(event.workout.type)} · ${escapeHtml(event.client.name)}">${escapeHtml(event.workout.time || "")} ${escapeHtml(event.workout.type)} · ${escapeHtml(event.client.name)}</button>`).join("")}${dayEvents.length > 2 ? `<span class="calendar-more">+${dayEvents.length - 2} további</span>` : ""}</div></article>`;
   }).join("");
   const selectedEvents = events.filter((event) => event.date === selectedDate);
@@ -53,7 +53,7 @@ export function renderCalendar(user) {
   const selectedEventRows = selectedEvents.map((event) => {
     if (event.kind === "individual") {
       const planDayLabel = trainingPlanDayLabel(event.workout.trainingPlanDayId);
-      return `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(trainerName(event.workout.trainerId))}</p>${planDayLabel ? `<p>Edzéstervnap: ${escapeHtml(planDayLabel)}</p>` : ""}${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : event.workout.status === "Lemondva" ? "cancelled" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`;
+      return `<div class="session-row"><div><strong>${escapeHtml(event.workout.time || "")} · ${escapeHtml(event.workout.type)}</strong><p>${escapeHtml(event.client.name)} · ${event.workout.duration || 0} perc · ${escapeHtml(workoutTrainerLabel(event.workout))}</p>${planDayLabel ? `<p>Edzéstervnap: ${escapeHtml(planDayLabel)}</p>` : ""}${event.workout.notes ? `<p>${escapeHtml(event.workout.notes)}</p>` : ""}</div><span class="status status-${event.workout.status === "Teljesítve" ? "active" : event.workout.status === "Lemondva" ? "cancelled" : "paused"}">${escapeHtml(event.workout.status || "Beütemezve")}</span>${user.role !== "client" ? `<button type="button" class="text-button" data-calendar-workout-client="${escapeHtml(event.client.id)}" data-calendar-workout-index="${event.index}">Szerkesztés</button>` : ""}</div>`;
     }
     const workout = event.workout;
     const startsAt = groupWorkoutDate(workout);

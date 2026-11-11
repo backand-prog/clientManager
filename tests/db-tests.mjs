@@ -134,6 +134,36 @@ const scenarios = {
       raise exception 'RESULT:%', res;
     end $$;`,
 
+  "edző-választás és kliens-korlát": `
+    do $$ declare res text := ''; c uuid := pg_temp.mk('client','dc'); t1 uuid := pg_temp.mk('trainer','dt1'); t2 uuid := pg_temp.mk('trainer','dt2'); t3 uuid := pg_temp.mk('trainer','dt3'); w uuid; r text; n int;
+    begin
+      insert into public.client_trainers (client_id, trainer_id) values (c, t1), (c, t2);
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (c, t1, current_date, '10:00', 'x', 30, 'Beütemezve') returning id into w;
+      perform pg_temp.as_user(c);
+      r := pg_temp.try('insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (''' || c || ''', ''' || t1 || ''', current_date, ''12:00'', ''k'', 30, ''Beütemezve'')');
+      res := res || pg_temp.chk('kliens a saját edzőjét sem adhatja meg új edzésnél', r <> 'OK');
+      r := pg_temp.try('update public.workouts set trainer_id = null where id = ''' || w || '''');
+      res := res || pg_temp.chk('kliens nem törölheti az edzés edzőjét', r <> 'OK');
+      r := pg_temp.try('update public.workouts set trainer_id = ''' || t2 || ''' where id = ''' || w || '''');
+      res := res || pg_temp.chk('kliens nem cserélheti az edzés edzőjét', r <> 'OK');
+      r := pg_temp.try('insert into public.workouts (client_id, workout_date, workout_time, workout_type, duration_minutes, status) values (''' || c || ''', current_date, ''13:00'', ''solo'', 30, ''Beütemezve'')');
+      res := res || pg_temp.chk('kliens felvehet egyéni edzést edző nélkül', r = 'OK');
+      select count(*) into n from public.get_client_trainer_directory();
+      res := res || pg_temp.chk('kliens látja a hozzá rendelt edzők nevét', n = 2);
+      reset role; perform pg_temp.as_user(t1);
+      r := pg_temp.try('insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (''' || c || ''', ''' || t1 || ''', current_date, ''14:00'', ''own'', 30, ''Beütemezve'')');
+      res := res || pg_temp.chk('edző felvehet edzést saját magával', r = 'OK');
+      r := pg_temp.try('insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (''' || c || ''', ''' || t2 || ''', current_date, ''15:00'', ''other'', 30, ''Beütemezve'')');
+      res := res || pg_temp.chk('edző megadhat másik, a klienshez rendelt edzőt', r = 'OK');
+      r := pg_temp.try('insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes, status) values (''' || c || ''', ''' || t3 || ''', current_date, ''16:00'', ''bad'', 30, ''Beütemezve'')');
+      res := res || pg_temp.chk('edző nem adhat meg a klienshez nem rendelt edzőt', r <> 'OK');
+      r := pg_temp.try('update public.workouts set trainer_id = ''' || t2 || ''' where id = ''' || w || '''');
+      res := res || pg_temp.chk('edző átadhatja az edzést a klienshez rendelt társának', r = 'OK');
+      select count(*) into n from public.get_client_trainer_directory();
+      res := res || pg_temp.chk('edző látja a kliens összes edzőjét', n = 2);
+      raise exception 'RESULT:%', res;
+    end $$;`,
+
   "stúdió RLS és csomag-öröklés": `
     do $$ declare res text := ''; h uuid := pg_temp.mk('trainer','sh'); s uuid := pg_temp.mk('trainer','ss'); o uuid := pg_temp.mk('trainer','so');
       cs uuid := pg_temp.mk('client','scs'); co uuid := pg_temp.mk('client','sco'); ch uuid := pg_temp.mk('client','sch'); n int;

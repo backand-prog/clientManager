@@ -222,12 +222,14 @@ using (
   or public.is_studio_head_of(trainer_id) or public.is_studio_client(client_id)
 );
 
+-- Kliens csak saját, edző nélküli (egyéni) edzést vehet fel. Edző a hozzá rendelt kliensnek veheti fel,
+-- az edző megadható másik, a klienshez rendelt edzőre is (ezt a guard_workout_assignment trigger ellenőrzi).
 drop policy if exists workouts_write on public.workouts;
 create policy workouts_write on public.workouts for insert to authenticated
 with check (
   public.current_role() = 'admin'
-  or (public.current_role() = 'client' and client_id = auth.uid())
-  or (public.current_role() = 'trainer' and public.is_assigned_trainer(client_id) and trainer_id = auth.uid())
+  or (public.current_role() = 'client' and client_id = auth.uid() and trainer_id is null)
+  or (public.current_role() = 'trainer' and public.is_assigned_trainer(client_id) and trainer_id is not null)
   or (
     public.is_studio_head_of(trainer_id)
     and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
@@ -245,7 +247,7 @@ using (
 with check (
   public.current_role() = 'admin'
   or (public.current_role() = 'client' and client_id = auth.uid())
-  or (public.current_role() = 'trainer' and trainer_id = auth.uid())
+  or (public.current_role() = 'trainer' and (trainer_id = auth.uid() or (public.is_assigned_trainer(client_id) and trainer_id is not null)))
   or (
     public.is_studio_head_of(trainer_id)
     and exists (select 1 from public.client_trainers ct where ct.client_id = workouts.client_id and ct.trainer_id = workouts.trainer_id)
@@ -1510,6 +1512,16 @@ begin
     raise exception 'Az edzés kliense nem módosítható.';
   end if;
 
+  -- Kliens nem adhat meg edzőt: csak saját, egyéni edzést vehet fel, a meglévő edzők nem módosíthatók.
+  if public.current_role() = 'client' then
+    if tg_op = 'INSERT' and new.trainer_id is not null then
+      raise exception 'Kliens csak edző nélküli, egyéni edzést vehet fel.';
+    end if;
+    if tg_op = 'UPDATE' and new.trainer_id is distinct from old.trainer_id then
+      raise exception 'Kliens nem módosíthatja az edzés edzőjét.';
+    end if;
+  end if;
+
   if new.trainer_id is not null
     and (tg_op = 'INSERT' or new.trainer_id is distinct from old.trainer_id)
     and not exists (
@@ -1529,6 +1541,24 @@ before insert or update on public.workouts
 for each row execute function public.guard_workout_assignment();
 
 revoke all on function public.guard_workout_assignment() from public, anon, authenticated;
+
+-- Az edzők neve és a kliensekhez rendelt edzők listája: a kliens és az edző a profiles táblából
+-- nem látja más edzők nevét, ezért ez az RPC adja a megjelenítéshez és az edző-választóhoz.
+create or replace function public.get_client_trainer_directory()
+returns table (client_id uuid, trainer_id uuid, trainer_name text)
+language sql stable security definer set search_path = ''
+as $$
+  select ct.client_id, ct.trainer_id, p.full_name
+  from public.client_trainers ct
+  join public.profiles p on p.id = ct.trainer_id
+  where ct.client_id = auth.uid()
+    or public.is_assigned_trainer(ct.client_id)
+    or public.is_studio_client(ct.client_id)
+    or public.current_role() = 'admin';
+$$;
+
+revoke all on function public.get_client_trainer_directory() from public, anon;
+grant execute on function public.get_client_trainer_directory() to authenticated;
 
 create or replace function public.save_training_plan(plan_payload jsonb)
 returns uuid

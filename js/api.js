@@ -72,7 +72,7 @@ export async function load() {
   if (error) throw error;
   const user = authData?.user;
   if (!user) return null;
-  const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult, subscriptionResult] = await Promise.all([
+  const [profilesResult, assignmentsResult, workoutsResult, requestsResult, notificationsResult, coachProfilesResult, groupWorkoutsResult, trainingPlansResult, subscriptionResult, directoryResult] = await Promise.all([
     client.from("profiles").select("*").order("created_at"),
     client.from("client_trainers").select("client_id, trainer_id"),
     client.from("workouts").select("*").order("workout_date", { ascending: false }),
@@ -83,8 +83,10 @@ export async function load() {
     client.from("training_plans")
       .select("*, training_plan_clients(client_id), training_plan_days(*, training_plan_exercises(*))")
       .order("updated_at", { ascending: false }),
-    client.from("subscriptions").select("plan, status, current_period_end").eq("user_id", user.id).maybeSingle()
+    client.from("subscriptions").select("plan, status, current_period_end").eq("user_id", user.id).maybeSingle(),
+    client.rpc("get_client_trainer_directory")
   ]);
+  if (directoryResult.error) throw directoryResult.error;
   if (profilesResult.error) throw profilesResult.error;
   if (assignmentsResult.error) throw assignmentsResult.error;
   if (workoutsResult.error) throw workoutsResult.error;
@@ -127,6 +129,7 @@ export async function load() {
   return {
     sessionId: user.id,
     studioTeam,
+    trainerDirectory: (directoryResult.data || []).map((row) => ({ clientId: row.client_id, trainerId: row.trainer_id, name: row.trainer_name })),
     subscription: {
       plan: subscriptionResult.data?.plan || "free",
       status: subscriptionResult.data?.status || "active",
