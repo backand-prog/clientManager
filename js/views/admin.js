@@ -163,7 +163,7 @@ function renderAdminSubscriptions() {
     ? `<div class="empty-state">Előfizetések betöltése…</div>`
       : rows ? `<div class="table-wrap"><table><thead><tr><th>Edző</th><th>Csomag</th><th>Állapot</th><th>Csomag módosítása</th></tr></thead><tbody>${rows}</tbody></table></div>`
         : `<div class="empty-state">Még nincs edzői fiók.</div>`;
-  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 3 kliens, csoportos edzés max 6 fő, 2 edzésterv (max 3 nap/terv). Pro és Studio: korlátlan. Az online fizetés hamarosan érkezik.</div>${content}</section>`;
+  return `<div class="topbar"><div><div class="eyebrow">Adminisztráció / Előfizetések</div><h1>Edzői csomagok</h1><p>Az edzők előfizetési csomagjainak kezelése. A módosítás azonnal érvénybe lép.</p></div></div><section class="panel"><div class="legal-status" role="note">Free: max 5 kliens, csoportos edzés max 8 fő, 2 edzésterv. Pro: max 30 kliens, csoportos edzés max 20 fő, korlátlan edzésterv. Studio: korlátlan.</div>${content}</section>`;
 }
 
 function renderAdminCoachProfiles() {
@@ -189,6 +189,16 @@ export async function loadAdminAccounts() {
     render();
   } catch (error) {
     toast(`Nem sikerült betölteni az adminisztrátori fiókokat: ${error.message}`);
+  }
+}
+
+export async function loadAdminSubscriptions() {
+  if (!remoteMode) return;
+  try {
+    data.adminSubscriptions = await api.listSubscriptions();
+    render();
+  } catch (error) {
+    toast(`Nem sikerült betölteni az előfizetéseket: ${error.message}`);
   }
 }
 

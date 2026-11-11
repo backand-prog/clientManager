@@ -24,7 +24,7 @@ import {
 import { toDateInputValue } from "./utils.js";
 import { calendarClientsFor, coachProfileFor, currentPlan, dateFromInputValue, escapeHtml, initials, pendingTrainerApplications, planLabel, selectedClient, trainers } from "./helpers.js";
 import { openModal, openUpgradeModal, renderStudioCoachModal, renderTrainerAssignmentModal, renderTrainerModal, renderWorkoutModalForUser } from "./modals.js";
-import { deleteTrainer, grantAdminRole, loadAdminAccounts, loadTrainerEmails, renderAdminContent, renderAdminHome } from "./views/admin.js";
+import { deleteTrainer, grantAdminRole, loadAdminAccounts, loadAdminSubscriptions, loadTrainerEmails, renderAdminContent, renderAdminHome } from "./views/admin.js";
 import { openCalendarWorkout, renderCalendar, renderGroupWorkoutModal } from "./views/calendar.js";
 import { renderClientTable, renderEnhancedClientDetail, renderTrainerClients } from "./views/clients.js";
 import { renderCoachDirectory, renderCoachProfileDetail, renderCoachProfileEditor } from "./views/coaches.js";
@@ -431,6 +431,7 @@ function bindEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => button.addEventListener("click", () => {
     navigateToView(button.dataset.view);
     if (button.dataset.view === "administrators") void loadAdminAccounts();
+    if (button.dataset.view === "subscriptions") void loadAdminSubscriptions();
     if (button.dataset.view === "trainers") void loadTrainerEmails();
   }));
   document.querySelector("#add-training-plan")?.addEventListener("click", () => {
