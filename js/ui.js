@@ -622,7 +622,7 @@ function bindEvents() {
         uploadedPaths.push(path);
         photos.push({ path, url: "" });
       }
-      await api.saveCoachProfile(values.specialty.trim(), values.bio.trim(), photos.map((photo) => photo.path), { phone: values.phone.trim(), contactEmail: values.contactEmail.trim(), location: values.location.trim(), availability: values.availability.trim(), shortBio: (values.shortBio || "").trim() });
+      await api.saveCoachProfile(values.specialty.trim(), values.bio.trim(), photos.map((photo) => photo.path), { phone: values.phone.trim(), contactEmail: values.contactEmail.trim(), location: values.location.trim(), availability: values.availability.trim(), shortBio: (values.shortBio || "").trim(), services: new FormData(event.currentTarget).getAll("services") });
       await refreshRemote();
       toast("A bemutatkozásod mentve.");
     } catch (error) {
@@ -641,7 +641,7 @@ function bindEvents() {
     if (!profile) return;
     const remaining = profile.photos.filter((photo) => photo.path !== path);
     try {
-      await api.saveCoachProfile(profile.specialty, profile.bio, remaining.map((photo) => photo.path), { phone: profile.phone || "", contactEmail: profile.contactEmail || "", location: profile.location || "", availability: profile.availability || "", shortBio: profile.shortBio || "" });
+      await api.saveCoachProfile(profile.specialty, profile.bio, remaining.map((photo) => photo.path), { phone: profile.phone || "", contactEmail: profile.contactEmail || "", location: profile.location || "", availability: profile.availability || "", shortBio: profile.shortBio || "", services: profile.services });
       await api.deleteCoachPhotos([path]);
       await refreshRemote();
       toast("A kép törölve.");

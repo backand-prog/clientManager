@@ -478,6 +478,15 @@ alter table public.coach_public_profiles
 alter table public.coach_public_profiles
   add constraint coach_public_profiles_short_bio_check check (char_length(short_bio) <= 200);
 
+-- Szolgáltatások: az edző a személyi edzés mellett masszázst is vállalhat.
+alter table public.coach_public_profiles
+add column if not exists services text[] not null default '{training}';
+alter table public.coach_public_profiles
+drop constraint if exists coach_public_profiles_services_check;
+alter table public.coach_public_profiles
+add constraint coach_public_profiles_services_check
+check (cardinality(services) >= 1 and services <@ array['training', 'massage']::text[]);
+
 alter table public.coach_public_profiles enable row level security;
 
 drop policy if exists coach_public_profiles_authenticated_read on public.coach_public_profiles;
@@ -489,6 +498,7 @@ grant select on public.coach_public_profiles to authenticated;
 
 drop function if exists public.save_coach_profile(text, text, text[]);
 drop function if exists public.save_coach_profile(text, text, text[], text, text, text, text);
+drop function if exists public.save_coach_profile(text, text, text[], text, text, text, text, text);
 
 create or replace function public.save_coach_profile(
   profile_specialty text,
@@ -498,7 +508,8 @@ create or replace function public.save_coach_profile(
   profile_contact_email text default '',
   profile_location text default '',
   profile_availability text default '',
-  profile_short_bio text default ''
+  profile_short_bio text default '',
+  profile_services text[] default null
 )
 returns void
 language plpgsql
@@ -541,6 +552,11 @@ begin
   if length(coalesce(profile_availability, '')) > 300 then
     raise exception 'Az idősávok leírása legfeljebb 300 karakter lehet.';
   end if;
+  if profile_services is not null and (
+    cardinality(profile_services) < 1 or not (profile_services <@ array['training', 'massage']::text[])
+  ) then
+    raise exception 'Válassz legalább egy szolgáltatást (edzés vagy masszázs).';
+  end if;
   if cardinality(safe_photo_paths) > 5 then
     raise exception 'Legfeljebb 5 kép tölthető fel.';
   end if;
@@ -555,8 +571,8 @@ begin
   set specialty = trim(profile_specialty)
   where id = auth.uid();
 
-  insert into public.coach_public_profiles (id, display_name, specialty, bio, short_bio, phone, contact_email, location, availability, photo_paths, updated_at)
-  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), trim(coalesce(profile_short_bio, '')), trim(coalesce(profile_phone, '')), trim(coalesce(profile_contact_email, '')), trim(coalesce(profile_location, '')), trim(coalesce(profile_availability, '')), safe_photo_paths, now())
+  insert into public.coach_public_profiles (id, display_name, specialty, bio, short_bio, phone, contact_email, location, availability, photo_paths, services, updated_at)
+  values (auth.uid(), coach_profile.full_name, trim(profile_specialty), trim(profile_bio), trim(coalesce(profile_short_bio, '')), trim(coalesce(profile_phone, '')), trim(coalesce(profile_contact_email, '')), trim(coalesce(profile_location, '')), trim(coalesce(profile_availability, '')), safe_photo_paths, coalesce(profile_services, '{training}'), now())
   on conflict (id) do update
   set display_name = excluded.display_name,
       specialty = excluded.specialty,
@@ -567,12 +583,13 @@ begin
       location = excluded.location,
       availability = excluded.availability,
       photo_paths = excluded.photo_paths,
+      services = case when profile_services is null then public.coach_public_profiles.services else excluded.services end,
       updated_at = excluded.updated_at;
 end;
 $$;
 
-revoke all on function public.save_coach_profile(text, text, text[], text, text, text, text, text) from public;
-grant execute on function public.save_coach_profile(text, text, text[], text, text, text, text, text) to authenticated;
+revoke all on function public.save_coach_profile(text, text, text[], text, text, text, text, text, text[]) from public;
+grant execute on function public.save_coach_profile(text, text, text[], text, text, text, text, text, text[]) to authenticated;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('coach-profile-images', 'coach-profile-images', false, 5242880, array['image/jpeg', 'image/png', 'image/webp'])

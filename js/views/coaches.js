@@ -3,16 +3,21 @@ import {
   data,
   selectedCoachId
 } from "../state.js";
-import { coachProfileFor, escapeHtml, initials } from "../helpers.js";
+import { COACH_SERVICES, coachProfileFor, escapeHtml, initials, serviceLabel } from "../helpers.js";
 import { filterAttrs, filterEmptyMessage, renderFilterBar, uniqueOptions } from "../filters.js";
+
+function renderServiceChips(profile) {
+  const services = profile.services || [];
+  return services.length ? `<div class="service-chips">${services.map((key) => `<span class="service-chip service-chip-${escapeHtml(key)}">${escapeHtml(serviceLabel(key))}</span>`).join("")}</div>` : "";
+}
 
 export function renderCoachDirectory() {
   const profiles = data.coachProfiles || [];
   return `<div class="topbar"><div><div class="eyebrow">Felfedezés</div><h1>Edzők böngészése</h1><p>Ismerd meg az edzőket, majd küldj kapcsolódási kérést.</p></div></div>
-    ${profiles.length ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés név, szakterület, helyszín vagy bemutatkozás alapján", selects: [{ key: "specialty", label: "Szakterület", options: uniqueOptions(profiles.map((profile) => profile.specialty)) }, { key: "location", label: "Helyszín", options: uniqueOptions(profiles.map((profile) => profile.location)) }, { key: "contact", label: "Elérhetőség", alwaysShow: true, options: [["email", "Van e-mail-cím"], ["photo", "Van fotó"]] }] })}<div class="coach-directory">${profiles.map((profile) => {
+    ${profiles.length ? `<div class="filter-scope">${renderFilterBar({ placeholder: "Keresés név, szakterület, helyszín vagy bemutatkozás alapján", selects: [{ key: "specialty", label: "Szakterület", options: uniqueOptions(profiles.map((profile) => profile.specialty)) }, { key: "services", label: "Szolgáltatás", alwaysShow: true, options: COACH_SERVICES }, { key: "location", label: "Helyszín", options: uniqueOptions(profiles.map((profile) => profile.location)) }, { key: "contact", label: "Elérhetőség", alwaysShow: true, options: [["email", "Van e-mail-cím"], ["photo", "Van fotó"]] }] })}<div class="coach-directory">${profiles.map((profile) => {
       const intro = profile.shortBio || (profile.bio.length > 200 ? `${profile.bio.slice(0, 197).trimEnd()}…` : profile.bio);
       const contactKinds = [profile.contactEmail ? "email" : "", (profile.photos || []).length ? "photo" : ""].filter(Boolean);
-      return `<article class="panel coach-card"${filterAttrs(`${profile.name} ${profile.specialty} ${profile.location} ${profile.shortBio} ${profile.bio}`, { specialty: profile.specialty, location: profile.location, contact: contactKinds.join("|") })}><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>${intro ? `<p class="coach-card-intro">${escapeHtml(intro)}</p>` : `<p class="coach-card-intro muted">Az edző még nem írt rövid bemutatkozást.</p>`}<button class="btn btn-teal coach-open-profile" type="button" data-coach-profile="${escapeHtml(profile.id)}">Edző profiljának megnyitása</button></article>`;
+      return `<article class="panel coach-card"${filterAttrs(`${profile.name} ${profile.specialty} ${profile.location} ${profile.shortBio} ${profile.bio}`, { specialty: profile.specialty, location: profile.location, services: (profile.services || []).join("|"), contact: contactKinds.join("|") })}><div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><h2>${escapeHtml(profile.name)}</h2><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>${renderServiceChips(profile)}${intro ? `<p class="coach-card-intro">${escapeHtml(intro)}</p>` : `<p class="coach-card-intro muted">Az edző még nem írt rövid bemutatkozást.</p>`}<button class="btn btn-teal coach-open-profile" type="button" data-coach-profile="${escapeHtml(profile.id)}">Edző profiljának megnyitása</button></article>`;
     }).join("")}</div>${filterEmptyMessage("Nincs a keresésnek megfelelő edző. Próbálj másik szűrőt.")}</div>` : `<section class="panel empty-state">Még nincs közzétett edzői bemutatkozás. Nézz vissza később.</section>`}`;
 }
 
@@ -41,7 +46,7 @@ export function renderCoachProfileDetail() {
   ].join("");
   return `<div class="topbar"><button class="text-button" data-view="${backView}">← ${backLabel}</button></div>
     <article class="panel coach-profile-detail">
-      <div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><div class="eyebrow">Edzői profil</div><h1>${escapeHtml(profile.name)}</h1><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>
+      <div class="coach-card-heading"><div class="avatar">${initials(profile.name)}</div><div><div class="eyebrow">Edzői profil</div><h1>${escapeHtml(profile.name)}</h1><p>${escapeHtml(profile.specialty || "Személyi edző")}</p></div></div>${renderServiceChips(profile)}
       <h2>Bemutatkozás</h2><p class="coach-bio">${escapeHtml(profile.bio || "Az edző hamarosan bővebb bemutatkozást ad hozzá.")}</p>
       ${contactRows ? `<h2>Elérhetőségek</h2><div class="profile-meta coach-contact-meta">${contactRows}</div>` : ""}
       ${profile.location ? `<h2>Edzéshelyszín</h2><p class="coach-bio">${escapeHtml(profile.location)}</p>` : ""}
@@ -55,6 +60,7 @@ export function renderCoachProfileEditor(user) {
   const profile = coachProfileFor(user.id) || { name: user.name, specialty: user.specialty || "", bio: "", phone: "", contactEmail: user.email || "", location: "", availability: "", photos: [] };
   return `<div class="topbar"><div><div class="eyebrow">Edzői tér / Bemutatkozás</div><h1>Edzői bemutatkozás</h1><p>Oszd meg a tapasztalatodat, és mutasd meg a klienseknek, hogyan dolgozol.</p></div></div>
     <section class="panel coach-profile-editor"><form id="coach-profile-form"><div class="field"><label for="coach-specialty">Szakterület</label><input id="coach-specialty" name="specialty" maxlength="120" value="${escapeHtml(profile.specialty || "")}" required /></div>
+      <fieldset class="field service-fieldset"><legend>Szolgáltatások</legend>${COACH_SERVICES.map(([value, label]) => `<label class="service-option"><input type="checkbox" name="services" value="${value}" ${(profile.services || ["training"]).includes(value) ? "checked" : ""} /> ${label}</label>`).join("")}<small class="settings-help">Ez jelenik meg az edzők böngészésénél. Legalább egyet válassz; a masszázs kiegészítő szolgáltatásként is vállalható.</small></fieldset>
       <div class="field"><label for="coach-short-bio">Rövid bemutatkozás (a böngészős kártyán jelenik meg)</label><textarea id="coach-short-bio" name="shortBio" maxlength="200" rows="3" placeholder="Egy-két mondat arról, miben segítesz a klienseknek...">${escapeHtml(profile.shortBio || "")}</textarea><small><span id="coach-short-bio-count">${(profile.shortBio || "").length}</span>/200 karakter</small></div>
       <div class="field"><label for="coach-bio">Hosszabb bemutatkozás (csak a profil megnyitása után látszik)</label><textarea id="coach-bio" name="bio" maxlength="2000" required placeholder="Írd le a tapasztalatodat és az edzésmódszeredet...">${escapeHtml(profile.bio || "")}</textarea><small>Legfeljebb 2000 karakter.</small></div>
       <fieldset class="coach-profile-section"><legend>Elérhetőségek</legend><div class="form-grid"><div class="field"><label for="coach-phone">Telefonszám</label><input id="coach-phone" name="phone" type="tel" maxlength="40" value="${escapeHtml(profile.phone || "")}" placeholder="pl. +36 30 123 4567" /></div><div class="field"><label for="coach-contact-email">Kapcsolati e-mail</label><input id="coach-contact-email" name="contactEmail" type="email" maxlength="254" value="${escapeHtml(profile.contactEmail || "")}" placeholder="pl. edzo@example.com" /></div></div><small>Csak a bejelentkezett felhasználók látják ezeket az adatokat.</small></fieldset>

@@ -123,6 +123,7 @@ export async function load() {
       specialty: profile.specialty || "",
       bio: profile.bio || "",
       shortBio: profile.short_bio || "",
+      services: profile.services?.length ? profile.services : ["training"],
       phone: profile.phone || "",
       contactEmail: profile.contact_email || "",
       location: profile.location || "",
@@ -350,7 +351,8 @@ export async function saveCoachProfile(specialty, bio, photoPaths, extras = {}) 
     profile_contact_email: extras.contactEmail || "",
     profile_location: extras.location || "",
     profile_availability: extras.availability || "",
-    profile_short_bio: extras.shortBio || ""
+    profile_short_bio: extras.shortBio || "",
+    profile_services: extras.services?.length ? extras.services : null
   });
   if (result.error) throw result.error;
 }
