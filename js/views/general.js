@@ -5,7 +5,7 @@ import { filterAttrs, filterEmptyMessage, renderFilterBar, uniqueOptions } from 
 import { coachProfileFor, currentPlan, escapeHtml, groupWorkoutDateLabel, groupWorkoutMeta, groupWorkoutStanding, groupWorkoutTime, initials, nextSessionLabel, planLabel, trainerName, upcomingGroupWorkouts, trainingPlanDayLabel, upcomingWorkouts, workoutStats, workoutTrainerLabel } from "../helpers.js";
 
 const PAID_PLANS = [
-  { id: "pro", description: "Korlátlan kliens, edzésterv és nagyobb csoportos edzések." },
+  { id: "pro", description: "Akár 30 kliens, korlátlan edzésterv és 20 fős csoportos edzések." },
   { id: "premium", description: "Minden Pro funkció, gyakorlatilag korlátlan kliens- és edzésterv-kapacitással." }
 ];
 
