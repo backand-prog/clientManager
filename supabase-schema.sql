@@ -485,7 +485,7 @@ alter table public.coach_public_profiles
 drop constraint if exists coach_public_profiles_services_check;
 alter table public.coach_public_profiles
 add constraint coach_public_profiles_services_check
-check (cardinality(services) >= 1 and services <@ array['training', 'massage']::text[]);
+check (cardinality(services) >= 1 and services <@ array['training', 'group', 'massage']::text[]);
 
 alter table public.coach_public_profiles enable row level security;
 
@@ -553,7 +553,7 @@ begin
     raise exception 'Az idősávok leírása legfeljebb 300 karakter lehet.';
   end if;
   if profile_services is not null and (
-    cardinality(profile_services) < 1 or not (profile_services <@ array['training', 'massage']::text[])
+    cardinality(profile_services) < 1 or not (profile_services <@ array['training', 'group', 'massage']::text[])
   ) then
     raise exception 'Válassz legalább egy szolgáltatást (edzés vagy masszázs).';
   end if;

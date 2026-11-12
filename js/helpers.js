@@ -232,5 +232,5 @@ export function workoutTypeCatalogOptions() {
   return `<datalist id="workout-type-catalog">${WORKOUT_TYPE_CATALOG.map((name) => `<option value="${escapeHtml(name)}"></option>`).join("")}</datalist>`;
 }
 
-export const COACH_SERVICES = [["training", "Személyi edzés"], ["massage", "Masszázs"]];
+export const COACH_SERVICES = [["training", "Személyi edzés"], ["group", "Csoportos edzés"], ["massage", "Masszázs"]];
 export const serviceLabel = (key) => (COACH_SERVICES.find(([value]) => value === key) || [])[1] || key;

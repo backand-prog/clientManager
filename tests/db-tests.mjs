@@ -216,6 +216,8 @@ const scenarios = {
       res := res || pg_temp.chk('ismeretlen szolgáltatás elutasítva', r <> 'OK');
       r := pg_temp.try('select public.save_coach_profile(''Erő'', ''Bio'', ''{}''::text[], '''', '''', '''', '''', '''', ''{training,massage}''::text[])');
       res := res || pg_temp.chk('edzés + masszázs elfogadva', r = 'OK' and (select services from public.coach_public_profiles where id = t) = '{training,massage}');
+      r := pg_temp.try('select public.save_coach_profile(''Erő'', ''Bio'', ''{}''::text[], '''', '''', '''', '''', '''', ''{training,group}''::text[])');
+      res := res || pg_temp.chk('edzés + csoportos elfogadva', r = 'OK' and (select services from public.coach_public_profiles where id = t) = '{training,group}');
       n := public.create_workout_status_reminder();
       res := res || pg_temp.chk('emlékeztető a le nem zárt tegnapi edzésről', n = 1 and exists (select 1 from public.connection_notifications where user_id = t and kind = 'workout_status_reminder'));
       n := public.create_workout_status_reminder();
