@@ -407,9 +407,12 @@ function bindEvents() {
       return;
     }
     const emailChanged = values.email !== user.email.toLowerCase();
-    Object.assign(user, values);
+    const emailReminders = values.emailReminders === "on";
+    delete values.emailReminders;
+    Object.assign(user, values, { emailReminders });
     try {
       await api.updateProfile(user);
+      await api.setEmailReminders(user.id, emailReminders);
       if (emailChanged) await auth.updateEmail(user.email);
       render();
       toast(emailChanged ? "Az adatok mentve. Erősítsd meg az új e-mail-címet a postafiókodban." : "A személyes adatok mentve.");

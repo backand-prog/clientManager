@@ -243,6 +243,32 @@ const scenarios = {
       perform pg_temp.as_user(u1);
       res := res || pg_temp.chk('az új edző current_role-ja trainer', public.current_role()::text = 'trainer');
       raise exception 'RESULT:%', res;
+    end $$;`,
+
+  "e-mailes emlékeztetők": `
+    do $$ declare res text := ''; t uuid := pg_temp.mk('trainer','rmt'); c uuid := pg_temp.mk('client','rmc'); d date := (now() at time zone 'Europe/Budapest')::date; r text;
+    begin
+      update auth.users set email_confirmed_at = now() where id in (t, c);
+      insert into public.client_trainers (client_id, trainer_id) values (c, t);
+      insert into public.workouts (client_id, trainer_id, workout_date, workout_time, workout_type, duration_minutes) values
+        (c, t, d + 1, '10:00', 'Futás', 60), (c, t, d - 1, '09:00', 'Erősítés', 45);
+      res := res || pg_temp.chk('kliens megkapja a másnapi emlékeztetőt', exists (select 1 from public.reminder_digest(d) x where x.user_id = c and x.kind = 'client_upcoming'));
+      res := res || pg_temp.chk('edző megkapja a lezáratlan edzések emlékeztetőjét', exists (select 1 from public.reminder_digest(d) x where x.user_id = t and x.kind = 'trainer_unmarked'));
+      res := res || pg_temp.chk('a kliens nem kap edzői emlékeztetőt', not exists (select 1 from public.reminder_digest(d) x where x.user_id = c and x.kind = 'trainer_unmarked'));
+      insert into public.reminder_email_log (user_id, kind, sent_on) values (c, 'client_upcoming', d);
+      res := res || pg_temp.chk('naplózott küldés után nem ismétlődik', not exists (select 1 from public.reminder_digest(d) x where x.user_id = c));
+      update public.profiles set email_reminders = false where id = t;
+      res := res || pg_temp.chk('leiratkozott felhasználó kimarad', not exists (select 1 from public.reminder_digest(d) x where x.user_id = t));
+      update public.profiles set email_reminders = true where id = t;
+      update public.workouts set status = 'Teljesítve' where workout_date = d - 1 and client_id = c;
+      res := res || pg_temp.chk('lezárt edzésről nincs emlékeztető', not exists (select 1 from public.reminder_digest(d) x where x.user_id = t));
+      update auth.users set email_confirmed_at = null where id = c;
+      perform pg_temp.as_user(t);
+      r := pg_temp.try('select * from public.reminder_digest(current_date)');
+      res := res || pg_temp.chk('bejelentkezett felhasználó nem hívhatja a digestet', r <> 'OK');
+      r := pg_temp.try('select * from public.reminder_email_log');
+      res := res || pg_temp.chk('a küldési napló nem olvasható', r <> 'OK');
+      raise exception 'RESULT:%', res;
     end $$;`};
 
 async function run(sql) {

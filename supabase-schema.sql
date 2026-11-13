@@ -154,7 +154,10 @@ create policy profiles_self_update on public.profiles for update to authenticate
 using (id = auth.uid()) with check (id = auth.uid());
 
 revoke update on public.profiles from public, anon, authenticated;
-grant update (full_name, specialty, goal, status, adherence, notes) on public.profiles to authenticated;
+alter table public.profiles
+  add column if not exists email_reminders boolean not null default true;
+
+grant update (full_name, specialty, goal, status, adherence, notes, email_reminders) on public.profiles to authenticated;
 
 drop policy if exists assignments_read on public.client_trainers;
 create policy assignments_read on public.client_trainers for select to authenticated
@@ -1860,3 +1863,66 @@ grant execute on function public.delete_training_plan(uuid) to authenticated;
 -- A Studio csapatkezelés segédfüggvényei már nem használtak.
 drop function if exists public.is_studio_head_of(uuid);
 drop function if exists public.is_studio_client(uuid);
+
+-- E-mailes emlékeztetők: a send-reminders Edge Function (service_role) hívja naponta.
+create table if not exists public.reminder_email_log (
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  kind text not null check (kind in ('client_upcoming', 'trainer_unmarked')),
+  sent_on date not null,
+  primary key (user_id, kind, sent_on)
+);
+alter table public.reminder_email_log enable row level security;
+revoke all on public.reminder_email_log from public, anon, authenticated;
+
+drop function if exists public.reminder_digest(date);
+create or replace function public.reminder_digest(today_value date)
+returns table (user_id uuid, email text, full_name text, kind text, items jsonb)
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  with client_items as (
+    select w.client_id as uid,
+      jsonb_build_object('time', to_char(w.workout_time, 'HH24:MI'), 'title', w.workout_type,
+        'minutes', w.duration_minutes, 'coach', t.full_name) as item, w.workout_time as ord
+    from public.workouts w
+    left join public.profiles t on t.id = w.trainer_id
+    where w.workout_date = today_value + 1 and w.status = 'Beütemezve'
+    union all
+    select r.client_id, jsonb_build_object('time', to_char(g.starts_at at time zone 'Europe/Budapest', 'HH24:MI'),
+      'title', g.title, 'minutes', g.duration_minutes, 'coach', t.full_name, 'group', true),
+      (g.starts_at at time zone 'Europe/Budapest')::time
+    from public.group_workout_registrations r
+    join public.group_workouts g on g.id = r.group_workout_id
+    join public.profiles t on t.id = g.trainer_id
+    where r.status = 'registered' and g.cancelled_at is null
+      and (g.starts_at at time zone 'Europe/Budapest')::date = today_value + 1
+  ),
+  trainer_items as (
+    select w.trainer_id as uid,
+      jsonb_build_object('time', to_char(w.workout_time, 'HH24:MI'), 'title', w.workout_type, 'client', c.full_name) as item,
+      w.workout_time as ord
+    from public.workouts w
+    join public.profiles c on c.id = w.client_id
+    where w.trainer_id is not null and w.workout_date = today_value - 1 and w.status = 'Beütemezve'
+  ),
+  combined as (
+    select uid, 'client_upcoming'::text as kind, jsonb_agg(item order by ord) as items from client_items group by uid
+    union all
+    select uid, 'trainer_unmarked', jsonb_agg(item order by ord) from trainer_items group by uid
+  )
+  select p.id, u.email::text, p.full_name, c.kind, c.items
+  from combined c
+  join public.profiles p on p.id = c.uid
+  join auth.users u on u.id = p.id
+  where p.email_reminders
+    and u.email_confirmed_at is not null
+    and not exists (
+      select 1 from public.reminder_email_log l
+      where l.user_id = p.id and l.kind = c.kind and l.sent_on = today_value
+    );
+$$;
+revoke all on function public.reminder_digest(date) from public, anon, authenticated;
+grant execute on function public.reminder_digest(date) to service_role;
+grant select, insert on public.reminder_email_log to service_role;

@@ -153,6 +153,7 @@ export async function load() {
         status: profile.status || "Aktív",
         adherence: profile.adherence || 0,
         notes: profile.notes || "",
+        emailReminders: profile.email_reminders !== false,
         joined: new Intl.DateTimeFormat("hu-HU", { year: "numeric", month: "short", day: "numeric" }).format(new Date(profile.created_at)),
         sessions: ownWorkouts.filter((workout) => workout.status === "Teljesítve").length,
         trainerIds: assignments.filter((assignment) => assignment.client_id === profile.id).map((assignment) => assignment.trainer_id),
@@ -234,6 +235,12 @@ export async function exportMyData() {
     coachProfile: coachProfileResult.data || null,
     trainingPlans: (trainingPlansResult.data || []).map(mapTrainingPlan)
   };
+}
+
+export async function setEmailReminders(userId, value) {
+  if (!enabled) return;
+  const result = await client.from("profiles").update({ email_reminders: Boolean(value) }).eq("id", userId);
+  if (result.error) throw result.error;
 }
 
 export async function updateProfile(user) {

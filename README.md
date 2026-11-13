@@ -151,3 +151,8 @@ Edzőként a **Bemutatkozásom** menüpontban szerkesztheted a profilodat és t�
 Az alkalmazás Beállítások oldalán elérhető a fiókadatok JSON-exportja, a személyes adatok módosítása és a fiók törlése. A Supabase módban a törlés admin Edge Functionön keresztül történik; a fiókhoz tartozó edzői képek eltávolítása megelőzi a fiók törlését. Az alkalmazás célja nem egészségügyi adatok tárolása: ne rögzíts diagnózist, betegséget, sérülést, gyógyszerelést vagy biometrikus adatot.
 
 A `LEGAL-COMPLIANCE.md` összefoglaló és a felületen megjelenő adatvédelmi/felhasználási szövegek tájékoztató jellegű tervezetek, nem jogi tanácsok és nem tekinthetők éles szolgáltatásra jóváhagyottnak. Éles indulás előtt véglegesítsd a szolgáltatói, adatkezelési, szerződési és fogyasztóvédelmi részleteket, kérj szakértői ellenőrzést, és vizsgáld felül a Supabase szerveroldali regisztráció-beállításait. A Supabase Dashboard állapotát a kód nem tudja automatikusan módosítani.
+## E-mailes emlékeztetők
+
+A napi emlékeztetőket a send-reminders Edge Function küldi Resend API-n keresztül: a kliensnek a másnapi edzéseiről, az edzőnek a tegnapi, még le nem zárt edzéseiről. A felhasználók a Beállítások oldalon kapcsolhatják ki. Az ütemezést a supabase/reminders-cron.sql (pg_cron + pg_net) adja; futtatás előtt töltsd ki a helyőrzőket.
+
+Szükséges Supabase secretek: RESEND_API_KEY, REMINDER_FROM (pl. BackPlan <emlekezteto@a-te-domained.hu>, a Resendben hitelesített feladó), CRON_SECRET, APP_URL. Deploy: supabase functions deploy send-reminders --no-verify-jwt (a hitelesítést az x-cron-secret fejléc végzi). Próba küldés nélkül: POST {"dryRun": true} törzzsel.
